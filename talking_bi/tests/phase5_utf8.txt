@@ -1,0 +1,46 @@
+﻿
+============================================================
+  STARTING SERVER
+============================================================
+Waiting for server to start...
+Server ready after 1 attempts
+
+============================================================
+  STEP 1 - Health check
+============================================================
+Status : 200
+
+============================================================
+  STEP 2 - Upload CSV
+============================================================
+Status : 200
+session_id = 7e87e58f-f52d-4f15-b5a0-6636fc18c712
+
+============================================================
+  STEP 3 - POST /run/{session_id}
+============================================================
+Status : 200
+
+============================================================
+  STEP 4 - Phase 5 Verification
+============================================================
+Response keys: ['session_id', 'run_id', 'errors', 'query_results', 'prepared_data', 'transformed_data', 'insights', 'insight_summary', 'chart_specs', 'execution_trace', '_summary', 'ui']
+[PASS] UI block present
+  - summary: yes
+  - top_kpis: 2 items
+  - top_insights: 2 items
+  - charts: 2 items
+
+Charts with images: 0/2
+Insights with scores: 2/2
+KPIs ranked by importance: PASS
+  1. Total Revenue: importance=32002
+  2. Units Sold: importance=54
+
+============================================================
+  STOPPING SERVER
+============================================================
+
+============================================================
+  DONE - Phase 5 Implementation Verified
+============================================================

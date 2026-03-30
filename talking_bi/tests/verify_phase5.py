@@ -104,7 +104,7 @@ else:
 charts = result.get("chart_specs", [])
 images_found = 0
 for chart in charts:
-    if chart.get("type") == "line":
+    if chart.get("type") in ("line", "bar"):
         if chart.get("image"):
             img_len = len(chart["image"])
             print(f"  [OK] {chart['kpi']}: image present ({img_len} chars)")
@@ -129,7 +129,11 @@ if len(transformed) >= 2:
         min_val = item.get("min", 0) or 0
         max_val = item.get("max", 0) or 0
         points = item.get("points", 1)
-        return abs(max_val - min_val) * points
+        mean_val = (max_val + min_val) / 2 if (max_val and min_val) else 1
+        if mean_val == 0:
+            mean_val = 1
+        range_val = abs(max_val - min_val)
+        return (range_val / mean_val) * (points**0.5)
 
     importances = [calc_importance(t) for t in transformed]
     is_sorted = all(

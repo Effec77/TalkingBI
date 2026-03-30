@@ -1,6 +1,14 @@
 """
-Multi-Provider LLM Manager - Phase 0B Patch
-Orchestrates 7 API keys across 4 providers with automatic fallback
+Multi-Provider LLM Manager - Phase 1 Updated
+Orchestrates 7 API keys across 4 providers with automatic fallback.
+
+Priority Order (updated):
+  1. Groq     (2 keys) — fastest, highest free quota
+  2. Mistral  (2 keys) — reliable secondary
+  3. OpenRouter (1 key) — broad model access
+  4. Gemini   (2 keys) — LAST RESORT only (strict quota limits)
+
+Gemini is reserved for reasoning-heavy tasks that fit within quota.
 """
 import os
 import json
@@ -13,20 +21,16 @@ load_dotenv()
 class LLMManager:
     """
     Multi-provider LLM orchestrator with automatic fallback.
-    
+
     Priority Order:
-    1. Gemini (2 keys)
-    2. Groq (2 keys) - fast fallback
-    3. Mistral (2 keys) - secondary fallback
-    4. OpenRouter (1 key) - last resort
+    1. Groq (2 keys)      — Primary: fast, high quota
+    2. Mistral (2 keys)   — Secondary fallback
+    3. OpenRouter (1 key) — Tertiary fallback
+    4. Gemini (2 keys)    — Last resort (quota-limited, reasoning tasks only)
     """
-    
+
     def __init__(self):
         self.providers = [
-            ("gemini", [
-                os.getenv("GEMINI_API_KEY_1"),
-                os.getenv("GEMINI_API_KEY_2")
-            ]),
             ("groq", [
                 os.getenv("GROQ_API_KEY_1"),
                 os.getenv("GROQ_API_KEY_2")
@@ -37,9 +41,13 @@ class LLMManager:
             ]),
             ("openrouter", [
                 os.getenv("OPENROUTER_API_KEY")
-            ])
+            ]),
+            ("gemini", [
+                os.getenv("GEMINI_API_KEY_1"),
+                os.getenv("GEMINI_API_KEY_2")
+            ]),
         ]
-        
+
         # Cache for responses
         self.cache = {}
     

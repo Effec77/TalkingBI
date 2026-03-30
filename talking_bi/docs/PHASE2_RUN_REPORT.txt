@@ -1,0 +1,230 @@
+﻿# TalkingBI - Phase 2 Verification Report
+Date: 30 March 2026
+Status: PASSED - All steps verified end-to-end
+
+============================================================
+EXECUTIVE SUMMARY
+============================================================
+
+Phase 2 implements the Pandas Execution Layer - the first time
+TalkingBI produces real business output. The system now accepts
+a CSV upload, automatically selects 3 KPIs, executes pandas
+queries safely, and returns computed results, insights, and
+chart specifications via a single API call.
+
+============================================================
+WHAT WAS BUILT
+============================================================
+
+NEW FILES:
+  graph/df_registry.py   Sidecar DataFrame store keyed by run_id
+                         Avoids serialization conflict with LangGraph state
+  tests/run_phase2.py    HTTP end-to-end test script
+  tests/debug_phase2.py  Local pipeline diagnostic with full traceback
+
+MODIFIED FILES:
+  graph/nodes.py         Full Phase 2 execution logic across all 4 nodes
+  api/run.py             df_registry wiring + _serialize_query_results()
+  graph/executor.py      Output validation assertions
+
+============================================================
+ARCHITECTURE DECISION: DATAFRAME REGISTRY
+============================================================
+
+Problem: LangGraph state is a TypedDict that must be
+JSON-serializable between nodes. A pandas DataFrame cannot
+live inside LangGraph state.
+
+Solution: A sidecar module-level registry keyed by run_id:
+
+  api/run.py       ->  register_df(run_id, df)    # before graph.invoke()
+  graph/nodes.py   ->  get_df(run_id)             # inside query_node only
+  api/run.py       ->  deregister_df(run_id)      # always cleaned up (finally)
+
+============================================================
+NODE EXECUTION LOGIC
+============================================================
+
+query_node:
+  - Retrieves DataFrame from registry by run_id
+  - Executes each KPI independently (one failure never blocks others)
+  - Supported: sum, avg/mean, min, max, count, nunique
+  - Supports groupby on time_column or segment_by
+  - No eval() or exec() - pure pandas only
+
+prep_node:
+  - pd.DataFrame -> {"type": "timeseries", "data": [records]}
+  - int/float    -> {"type": "scalar", "value": N}
+  - Unknown      -> {"type": "unknown", "raw": str}  (never crashes)
+
+insight_node:
+  - Rule-based only (no LLM in Phase 2)
+  - Timeseries: min/max value range across periods
+  - Scalars: formatted number with comma separators
+
+chart_node:
+  - timeseries -> line chart spec with x_key/y_key auto-detected
+  - scalar     -> metric card spec
+  - Unknown    -> placeholder (never dropped)
+
+============================================================
+TEST DATASET
+============================================================
+
+File: data/test_data.csv
+Shape: 10 rows x 5 columns
+Columns: date, sales, region, product, quantity
+Missing: sales = 10% (1 row)
+
+Date,Sales,Region,Product,Quantity
+2024-01-01,1500.50,North,Widget A,10
+2024-01-02,2300.75,South,Widget B,15
+2024-01-03,1800.00,East,Widget A,12
+2024-01-04,,West,Widget C,8
+2024-01-05,3200.25,North,Widget B,20
+2024-01-06,1950.00,South,Widget A,14
+2024-01-07,2700.50,East,Widget C,18
+2024-01-08,2100.00,West,Widget B,16
+2024-01-09,1600.75,North,Widget C,11
+2024-01-10,2900.00,South,Widget A,19
+
+============================================================
+VERIFIED TERMINAL RUN
+============================================================
+
+--- Server Startup ---
+INFO:     Application startup complete.
+Session cleanup scheduler started
+
+--- Step 1: Health Check ---
+Status : 200
+Body   : {'status': 'healthy'}
+
+--- Step 2: CSV Upload (POST /upload) ---
+Status : 200
+session_id : 9fb35400-cbd3-410c-95c7-e000de76f8d3
+filename   : test_data.csv
+shape      : [10, 5]
+columns    : [date, sales, region, product, quantity]
+missing    : {date:0.0, sales:0.1, region:0.0, product:0.0, quantity:0.0}
+
+--- Step 3: Pipeline Execution (POST /run/{session_id}) ---
+
+Server logs in verified execution order:
+
+[DF_REGISTRY] Registered df for run_id=c9cfdaf4-... (10 rows, 5 cols)
+[EXECUTOR]   Running pipeline
+[EXECUTOR]   run_id=c9cfdaf4-6347-4adc-8e90-c2f3071aa23d
+[GRAPH]      Building LangGraph instance
+
+[NODE:query] run_id=c9cfdaf4-6347-4adc-8e90-c2f3071aa23d
+[NODE:query] Total Revenue (sum)     -> OK
+[NODE:query] Units Sold (sum)        -> OK
+[NODE:query] Total Product (nunique) -> OK
+
+[NODE:prep]    Total Revenue  -> timeseries (10 rows)
+[NODE:prep]    Units Sold     -> timeseries (3 rows)
+[NODE:prep]    Total Product  -> timeseries (4 rows)
+
+[NODE:insight] Total Revenue   -> OK
+[NODE:insight] Units Sold      -> OK
+[NODE:insight] Total Product   -> OK
+
+[NODE:chart]   Total Revenue   -> line chart
+[NODE:chart]   Units Sold      -> line chart
+[NODE:chart]   Total Product   -> line chart
+
+[EXECUTOR] Pipeline complete - queries=3, charts=3, insights=3
+[DF_REGISTRY] Deregistered df for run_id=c9cfdaf4-...
+
+--- Step 4: Computed Results ---
+
+query_results:
+
+  [success] Total Revenue (groupby date, sum)
+            date    value
+  0  2024-01-01  1500.50
+  1  2024-01-02  2300.75
+  2  2024-01-03  1800.00
+  3  2024-01-04     0.00   <- missing sale treated as 0
+  4  2024-01-05  3200.25
+  5  2024-01-06  1950.00
+  6  2024-01-07  2700.50
+  7  2024-01-08  2100.00
+  8  2024-01-09  1600.75
+  9  2024-01-10  2900.00
+
+  [success] Units Sold (groupby product, sum)
+     product  value
+  0  Widget A     55
+  1  Widget B     51
+  2  Widget C     37
+
+  [success] Total Product (groupby region, nunique)
+     region  value
+  0   East      2
+  1  North      3
+  2  South      2
+  3   West      2
+
+insights (rule-based, no LLM):
+
+  Total Revenue : "Total Revenue varies across 10 periods (range: 0.00 - 3,200.25)"
+  Units Sold    : "Units Sold varies across 3 periods (range: 37.00 - 55.00)"
+  Total Product : "Total Product varies across 4 periods (range: 2.00 - 3.00)"
+
+chart_specs:
+
+  Total Revenue  -> line chart  [x=date     y=value]
+  Units Sold     -> line chart  [x=product  y=value]
+  Total Product  -> line chart  [x=region   y=value]
+
+--- Final Count ---
+
+  query_results : 3
+  prepared_data : 3
+  insights      : 3
+  chart_specs   : 3
+  errors        : []
+
+  ALL STEPS PASSED
+
+============================================================
+NON-NEGOTIABLE RULES - VERIFIED
+============================================================
+
+  No eval() or exec() anywhere             : PASS
+  DataFrame never enters LangGraph state   : PASS
+  Each KPI executes independently          : PASS
+  One failed KPI does not block others     : PASS
+  DataFrame always freed after pipeline    : PASS
+  Output validation assertions in executor : PASS
+  No LLM calls inside nodes               : PASS
+
+============================================================
+CURRENT SYSTEM STATE
+============================================================
+
+  Phase 0A  COMPLETE   CSV upload, validation, session management
+  Phase 0B  COMPLETE   KPI selection, LLM enrichment, dashboard planning
+  Phase 1   COMPLETE   LangGraph skeleton, lazy init, structural fixes
+  Phase 2   COMPLETE   Pandas execution engine  <- THIS PHASE
+  -----------------------------------------------------------
+  Phase 3   NEXT       DeepPrep - data transformation operators
+  Phase 4   PLANNED    Insight Layer - 6 insight types + LLM narratives
+  Phase 5   PLANNED    Chart Layer - Matplotlib rendering
+  Phase 6   PLANNED    Conversation Layer - voice/text NL interface
+  Phase 7   PLANNED    RLHF System - feedback and improvement
+
+============================================================
+LLM PROVIDER PRIORITY (UPDATED THIS SESSION)
+============================================================
+
+  1st  Groq       (x2 keys)  Fastest, highest free quota
+  2nd  Mistral    (x2 keys)  Reliable secondary
+  3rd  OpenRouter (x1 key)   Broad model access
+  4th  Gemini     (x2 keys)  Last resort - quota-limited, reasoning only
+
+============================================================
+TalkingBI v0.3.0 - Report generated 30 March 2026
+============================================================

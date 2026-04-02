@@ -15,12 +15,12 @@ class PipelineState(TypedDict):
     chart_specs: List[dict]
 
     # Phase 4 — Analytical Intelligence
-    insight_summary: Optional[str]     # LLM-generated narrative (enhancement only)
+    insight_summary: Optional[str]  # LLM-generated narrative (enhancement only)
 
     # Phase 3 — DeepPrep + adaptive execution
-    transformed_data: Optional[list]   # min/max/points per timeseries KPI
-    retry_flags: dict                  # {kpi_name: bool} — tracks retry attempts
-    execution_trace: list              # ordered list of visited node names
+    transformed_data: Optional[list]  # min/max/points per timeseries KPI
+    retry_flags: dict  # {kpi_name: bool} — tracks retry attempts
+    execution_trace: list  # ordered list of visited node names
 
     is_refinement: bool
     target_components: List[str]
@@ -30,3 +30,8 @@ class PipelineState(TypedDict):
 
     run_id: str
     parent_run_id: Optional[str]
+
+    # Phase 6B/6C — Intent resolution
+    intent: Optional[dict]  # Resolved intent (post-context resolution)
+    intent_raw: Optional[dict]  # Original parsed intent
+    resolution_status: Optional[str]  # RESOLVED, INCOMPLETE, AMBIGUOUS, UNKNOWN

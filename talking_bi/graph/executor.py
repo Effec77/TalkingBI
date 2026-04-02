@@ -20,16 +20,30 @@ def run_pipeline(initial_state: PipelineState) -> PipelineState:
 
     # ── Output validation ───────────────────────────────────────────────
     # Fail loudly if any node dropped a required key from the state.
-    assert "query_results" in result, "[EXECUTOR] query_results missing from final state"
-    assert "prepared_data" in result, "[EXECUTOR] prepared_data missing from final state"
+    assert "query_results" in result, (
+        "[EXECUTOR] query_results missing from final state"
+    )
+    assert "prepared_data" in result, (
+        "[EXECUTOR] prepared_data missing from final state"
+    )
     assert "insights" in result, "[EXECUTOR] insights missing from final state"
     assert "chart_specs" in result, "[EXECUTOR] chart_specs missing from final state"
     # Phase 3 validations
-    assert "transformed_data" in result, "[EXECUTOR] transformed_data missing from final state"
-    assert "execution_trace" in result, "[EXECUTOR] execution_trace missing from final state"
+    assert "transformed_data" in result, (
+        "[EXECUTOR] transformed_data missing from final state"
+    )
+    assert "execution_trace" in result, (
+        "[EXECUTOR] execution_trace missing from final state"
+    )
+    # Phase 6B validation - intent must survive pipeline
+    assert "intent" in result, (
+        "[EXECUTOR] intent missing from final state - Phase 6C will fail!"
+    )
 
     trace = result.get("execution_trace", [])
-    retries = sum(1 for r in result.get("query_results", []) if r.get("status") == "retry_success")
+    retries = sum(
+        1 for r in result.get("query_results", []) if r.get("status") == "retry_success"
+    )
     has_narrative = result.get("insight_summary") is not None
 
     print(
@@ -42,4 +56,3 @@ def run_pipeline(initial_state: PipelineState) -> PipelineState:
         f"trace={trace}"
     )
     return result
-

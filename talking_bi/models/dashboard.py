@@ -2,12 +2,9 @@
 Dashboard Plan Data Contracts
 Phase 0B - Dataset Intelligence
 """
+
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
-
-
-@dataclass(frozen=True)
-class KPI:
 
 
 @dataclass(frozen=True)

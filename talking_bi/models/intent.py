@@ -12,13 +12,17 @@ class Intent(TypedDict):
 
     Attributes:
         intent: The analytical intent type (from VALID_INTENTS)
-        kpi: Target KPI name if specified
+        kpi: Target KPI name if specified (primary KPI)
+        kpi_1: Primary KPI for COMPARE intent (resolver fills from context if null)
+        kpi_2: Secondary KPI for COMPARE intent (explicit comparison target)
         dimension: Column to segment by or filter on
         filter: Filter value or condition
     """
 
     intent: str
     kpi: Optional[str]
+    kpi_1: Optional[str]
+    kpi_2: Optional[str]
     dimension: Optional[str]
     filter: Optional[str]
 

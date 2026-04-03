@@ -40,125 +40,228 @@ from typing import Any, Dict, List, Optional, Tuple
 # ─────────────────────────────────────────────────────────────
 SEMANTIC_MAP: Dict[str, List[str]] = {
     # Revenue / financial
-    "sales":        ["revenue", "sales", "amount", "total_amount", "total_revenue",
-                     "net_revenue", "gross_revenue", "income", "turnover"],
-    "earnings":     ["revenue", "sales", "net_income", "earnings", "profit",
-                     "net_profit", "gross_profit"],
-    "income":       ["revenue", "income", "net_income", "gross_income", "earnings"],
-    "revenue":      ["revenue", "total_revenue", "net_revenue", "gross_revenue",
-                     "sales", "amount"],
-
+    "sales": [
+        "revenue",
+        "sales",
+        "amount",
+        "total_amount",
+        "total_revenue",
+        "net_revenue",
+        "gross_revenue",
+        "income",
+        "turnover",
+    ],
+    "earnings": [
+        "revenue",
+        "sales",
+        "net_income",
+        "earnings",
+        "profit",
+        "net_profit",
+        "gross_profit",
+    ],
+    "income": ["revenue", "income", "net_income", "gross_income", "earnings"],
+    "revenue": [
+        "revenue",
+        "total_revenue",
+        "net_revenue",
+        "gross_revenue",
+        "sales",
+        "amount",
+    ],
     # Product / inventory
-    "orders":       ["order_count", "orders", "total_orders", "num_orders",
-                     "quantity", "units_sold"],
-    "quantity":     ["quantity", "units", "units_sold", "volume", "count"],
-
+    "orders": [
+        "order_count",
+        "orders",
+        "total_orders",
+        "num_orders",
+        "quantity",
+        "units_sold",
+    ],
+    "quantity": ["quantity", "units", "units_sold", "volume", "count"],
     # Engagement / activity (SaaS / product analytics)
-    "activity":     ["event_count", "sessions", "logins", "active_users", "clicks"],
-    "sessions":     ["sessions", "session_count", "visits", "session_duration"],
-    "retention":    ["retention_rate", "churn_flag", "churned", "active_users"],
-    "churn":        ["churn_flag", "churn_rate", "churned", "cancelled"],
-
+    "activity": ["event_count", "sessions", "logins", "active_users", "clicks"],
+    "sessions": ["sessions", "session_count", "visits", "session_duration"],
+    "retention": ["retention_rate", "churn_flag", "churned", "active_users"],
+    "churn": ["churn_flag", "churn_rate", "churned", "cancelled"],
     # Trends
-    "trend":        ["revenue", "sales", "monthly_revenue", "mrr", "order_count"],
-
+    "trend": ["revenue", "sales", "monthly_revenue", "mrr", "order_count"],
     # SaaS metrics
-    "mrr":          ["mrr", "monthly_recurring_revenue", "monthly_revenue",
-                     "subscription_revenue"],
-    "arr":          ["arr", "annual_recurring_revenue", "annual_revenue"],
-    "ltv":          ["ltv", "lifetime_value", "customer_lifetime_value", "clv"],
-    "conversion":   ["conversion_rate", "conversions", "converted"],
-    "subscribers":  ["subscriber_count", "subscribers", "active_subscribers",
-                     "subscriptions"],
-
+    "mrr": [
+        "mrr",
+        "monthly_recurring_revenue",
+        "monthly_revenue",
+        "subscription_revenue",
+    ],
+    "arr": ["arr", "annual_recurring_revenue", "annual_revenue"],
+    "ltv": ["ltv", "lifetime_value", "customer_lifetime_value", "clv"],
+    "conversion": ["conversion_rate", "conversions", "converted"],
+    "subscribers": [
+        "subscriber_count",
+        "subscribers",
+        "active_subscribers",
+        "subscriptions",
+    ],
     # Cost / expense
-    "cost":         ["cost", "expenses", "total_cost", "cogs", "spend"],
-    "expenses":     ["expenses", "cost", "total_cost", "spend", "cogs"],
-    "profit":       ["profit", "net_profit", "gross_profit", "margin",
-                     "profit_margin"],
-    "margin":       ["profit_margin", "gross_margin", "margin", "profit"],
-
+    "cost": ["cost", "expenses", "total_cost", "cogs", "spend"],
+    "expenses": ["expenses", "cost", "total_cost", "spend", "cogs"],
+    "profit": ["profit", "net_profit", "gross_profit", "margin", "profit_margin"],
+    "margin": ["profit_margin", "gross_margin", "margin", "profit"],
     # Customers / users
-    "customers":    ["customer_count", "customers", "new_customers", "total_customers",
-                     "unique_customers"],
-    "users":        ["user_count", "users", "active_users", "total_users",
-                     "unique_users"],
-
+    "customers": [
+        "customer_count",
+        "customers",
+        "new_customers",
+        "total_customers",
+        "unique_customers",
+    ],
+    "users": ["user_count", "users", "active_users", "total_users", "unique_users"],
     # Finance
-    "spend":        ["spend", "expenses", "cost", "total_spend", "amount"],
-    "budget":       ["budget", "allocated", "spend", "cost"],
-    "balance":      ["balance", "closing_balance", "account_balance", "net_balance"],
-    "assets":       ["assets", "total_assets", "asset_value"],
-    "liabilities":  ["liabilities", "total_liabilities"],
-
+    "spend": ["spend", "expenses", "cost", "total_spend", "amount"],
+    "budget": ["budget", "allocated", "spend", "cost"],
+    "balance": ["balance", "closing_balance", "account_balance", "net_balance"],
+    "assets": ["assets", "total_assets", "asset_value"],
+    "liabilities": ["liabilities", "total_liabilities"],
     # ── Domain-specific (Phase 8 improvements) ────────────────────────
-
     # "performance" — domain-agnostic: highest-confidence column in the
     # actual dataset wins. HR → performance_score, marketing → revenue, etc.
-    "performance":  ["performance_score", "revenue", "sales", "profit",
-                     "amount", "total_revenue", "net_revenue", "conversion_rate",
-                     "output_units", "delivery_time", "feature_usage", "salary"],
-
+    "performance": [
+        "performance_score",
+        "revenue",
+        "sales",
+        "profit",
+        "amount",
+        "total_revenue",
+        "net_revenue",
+        "conversion_rate",
+        "output_units",
+        "delivery_time",
+        "feature_usage",
+        "salary",
+    ],
     # "growth" — domain-agnostic: covers SaaS (mrr), ecommerce (revenue), HR etc.
-    "growth":       ["mrr", "revenue", "arr", "sales", "monthly_revenue",
-                     "feature_usage", "new_customers", "signups", "output_units"],
-
+    "growth": [
+        "mrr",
+        "revenue",
+        "arr",
+        "sales",
+        "monthly_revenue",
+        "feature_usage",
+        "new_customers",
+        "signups",
+        "output_units",
+    ],
     # "volume" — generic high-cardinality metric
-    "volume":       ["quantity", "amount", "transaction_count", "units_sold",
-                     "output_units", "impressions", "order_count"],
-
+    "volume": [
+        "quantity",
+        "amount",
+        "transaction_count",
+        "units_sold",
+        "output_units",
+        "impressions",
+        "order_count",
+    ],
     # "transactions" — covers banking amount as primary hit
-    "transactions": ["amount", "transaction_count", "transactions",
-                     "num_transactions", "order_count"],
-
+    "transactions": [
+        "amount",
+        "transaction_count",
+        "transactions",
+        "num_transactions",
+        "order_count",
+    ],
     # HR domain
-    "workforce":    ["salary", "employee_count", "headcount", "total_salary"],
-    "attrition":    ["attrition_flag", "churn_flag", "turnover_rate", "churned"],
+    "workforce": ["salary", "employee_count", "headcount", "total_salary"],
+    "attrition": ["attrition_flag", "churn_flag", "turnover_rate", "churned"],
     "compensation": ["salary", "total_compensation", "pay", "wages"],
-    "headcount":    ["employee_count", "headcount", "staff_count", "total_employees"],
-
+    "headcount": ["employee_count", "headcount", "staff_count", "total_employees"],
     # Supply chain domain
-    "efficiency":   ["delivery_time", "inventory_level", "cycle_time",
-                     "throughput", "on_time_rate", "fill_rate"],
-    "delays":       ["delay_flag", "late_deliveries", "overdue_count",
-                     "delay_rate", "missed_sla"],
-    "inventory":    ["inventory_level", "stock_level", "units_in_stock",
-                     "on_hand", "warehouse_qty"],
-    "fulfillment":  ["delivery_time", "on_time_rate", "fill_rate", "lead_time"],
-    "lead_time":    ["delivery_time", "lead_time", "cycle_time", "processing_time"],
-    "shipments":    ["shipment_count", "deliveries", "orders_shipped", "delivery_time"],
-
+    "efficiency": [
+        "delivery_time",
+        "inventory_level",
+        "cycle_time",
+        "throughput",
+        "on_time_rate",
+        "fill_rate",
+    ],
+    "delays": [
+        "delay_flag",
+        "late_deliveries",
+        "overdue_count",
+        "delay_rate",
+        "missed_sla",
+    ],
+    "inventory": [
+        "inventory_level",
+        "stock_level",
+        "units_in_stock",
+        "on_hand",
+        "warehouse_qty",
+    ],
+    "fulfillment": ["delivery_time", "on_time_rate", "fill_rate", "lead_time"],
+    "lead_time": ["delivery_time", "lead_time", "cycle_time", "processing_time"],
+    "shipments": ["shipment_count", "deliveries", "orders_shipped", "delivery_time"],
     # Manufacturing domain
-    "production":   ["output_units", "units_produced", "throughput",
-                     "production_volume", "units_manufactured"],
-    "quality":      ["defect_count", "defect_rate", "yield", "scrap_rate",
-                     "reject_rate", "pass_rate"],
-    "downtime":     ["downtime_minutes", "machine_downtime", "idle_time",
-                     "unplanned_downtime"],
-    "output":       ["output_units", "production_volume", "units_produced",
-                     "throughput"],
-    "defects":      ["defect_count", "defect_rate", "reject_count", "scrap_count"],
-
+    "production": [
+        "output_units",
+        "units_produced",
+        "throughput",
+        "production_volume",
+        "units_manufactured",
+    ],
+    "quality": [
+        "defect_count",
+        "defect_rate",
+        "yield",
+        "scrap_rate",
+        "reject_rate",
+        "pass_rate",
+    ],
+    "downtime": [
+        "downtime_minutes",
+        "machine_downtime",
+        "idle_time",
+        "unplanned_downtime",
+    ],
+    "output": ["output_units", "production_volume", "units_produced", "throughput"],
+    "defects": ["defect_count", "defect_rate", "reject_count", "scrap_count"],
     # Banking / finance domain
-    "fraud":        ["fraud_flag", "fraud_rate", "suspicious_count",
-                     "fraudulent_transactions"],
-    "risk":         ["fraud_flag", "risk_score", "fraud_rate", "default_rate"],
-    "deposits":     ["deposit_amount", "deposits", "balance", "amount"],
-    "withdrawals":  ["withdrawal_amount", "withdrawals", "amount"],
-
+    "fraud": [
+        "fraud_flag",
+        "fraud_rate",
+        "suspicious_count",
+        "fraudulent_transactions",
+    ],
+    "risk": ["fraud_flag", "risk_score", "fraud_rate", "default_rate"],
+    "deposits": ["deposit_amount", "deposits", "balance", "amount"],
+    "withdrawals": ["withdrawal_amount", "withdrawals", "amount"],
     # SaaS — feature-level engagement
-    "usage":        ["feature_usage", "session_duration", "event_count", "sessions",
-                     "page_views", "active_users", "dau", "mau", "logins", "clicks"],
-    "engagement":   ["feature_usage", "session_duration", "page_views",
-                     "event_count", "clicks", "interactions", "sessions"],
-
+    "usage": [
+        "feature_usage",
+        "session_duration",
+        "event_count",
+        "sessions",
+        "page_views",
+        "active_users",
+        "dau",
+        "mau",
+        "logins",
+        "clicks",
+    ],
+    "engagement": [
+        "feature_usage",
+        "session_duration",
+        "page_views",
+        "event_count",
+        "clicks",
+        "interactions",
+        "sessions",
+    ],
     # Marketing domain
-    "traffic":      ["impressions", "clicks", "sessions", "page_views",
-                     "visitors", "reach"],
-    "reach":        ["impressions", "reach", "audience_size", "views"],
-    "clicks":       ["clicks", "click_count", "ctr", "click_through"],
-    "conversions":  ["conversions", "conversion_rate", "leads", "sign_ups"],
-    "roi":          ["revenue", "roas", "return_on_ad_spend", "profit"],
+    "traffic": ["impressions", "clicks", "sessions", "page_views", "visitors", "reach"],
+    "reach": ["impressions", "reach", "audience_size", "views"],
+    "clicks": ["clicks", "click_count", "ctr", "click_through"],
+    "conversions": ["conversions", "conversion_rate", "leads", "sign_ups"],
+    "roi": ["revenue", "roas", "return_on_ad_spend", "profit"],
 }
 
 # Minimum confidence threshold to apply a semantic mapping
@@ -168,6 +271,7 @@ CONFIDENCE_THRESHOLD = 0.70
 # ─────────────────────────────────────────────────────────────
 # Scoring / matching helpers
 # ─────────────────────────────────────────────────────────────
+
 
 def _normalize(text: str) -> str:
     """Lowercase, strip, collapse spaces/underscores."""
@@ -290,17 +394,41 @@ def _extract_vague_term(query: str, intent: Dict[str, Any]) -> Optional[str]:
     query_lower = query.lower().strip()
 
     # Strip common prefixes
-    prefixes = ["show me", "show", "display", "give me", "what is", "what are",
-                "get", "fetch", "analyze", "analysis of", "report on", "report",
-                "summarize", "summary of", "summary"]
+    prefixes = [
+        "show me",
+        "show",
+        "display",
+        "give me",
+        "what is",
+        "what are",
+        "get",
+        "fetch",
+        "analyze",
+        "analysis of",
+        "report on",
+        "report",
+        "summarize",
+        "summary of",
+        "summary",
+    ]
     for prefix in prefixes:
         if query_lower.startswith(prefix + " "):
-            query_lower = query_lower[len(prefix):].strip()
+            query_lower = query_lower[len(prefix) :].strip()
             break
 
     # Strip common suffixes
-    suffixes = ["data", "metrics", "numbers", "stats", "statistics", "trend",
-                "trends", "analysis", "report", "overview"]
+    suffixes = [
+        "data",
+        "metrics",
+        "numbers",
+        "stats",
+        "statistics",
+        "trend",
+        "trends",
+        "analysis",
+        "report",
+        "overview",
+    ]
     for suffix in suffixes:
         if query_lower.endswith(" " + suffix):
             query_lower = query_lower[: -(len(suffix) + 1)].strip()
@@ -386,8 +514,13 @@ class SemanticInterpreter:
 
         # ── Guard 2: Only run on relevant intents ─────────────────────
         intent_type = intent.get("intent", "UNKNOWN")
-        eligible_intents = {"UNKNOWN", "SEGMENT_BY", "SUMMARIZE",
-                            "EXPLAIN_TREND", "FILTER"}
+        eligible_intents = {
+            "UNKNOWN",
+            "SEGMENT_BY",
+            "SUMMARIZE",
+            "EXPLAIN_TREND",
+            "FILTER",
+        }
         if intent_type not in eligible_intents:
             return _skip(f"intent={intent_type} not eligible for semantic mapping")
 
@@ -404,9 +537,7 @@ class SemanticInterpreter:
         primary_term = vague_term.replace("_", " ").split()[0]
 
         # ── Step 2: Resolve via semantic map ──────────────────────────
-        kpi_dict, confidence, source = _resolve_vague_term(
-            primary_term, kpi_candidates
-        )
+        kpi_dict, confidence, source = _resolve_vague_term(primary_term, kpi_candidates)
 
         # ── Guard 4: Confidence gate ──────────────────────────────────
         if kpi_dict is None or confidence < CONFIDENCE_THRESHOLD:
@@ -421,7 +552,7 @@ class SemanticInterpreter:
             }
             print(
                 f"[7] Skipped: low confidence "
-                f"('{primary_term}' → {confidence:.2f} < {CONFIDENCE_THRESHOLD})"
+                f"('{primary_term}' -> {confidence:.2f} < {CONFIDENCE_THRESHOLD})"
             )
             return result
 
@@ -433,7 +564,7 @@ class SemanticInterpreter:
         # If intent was UNKNOWN and we resolved a KPI, upgrade to SEGMENT_BY
         if intent_type == "UNKNOWN":
             result["intent"] = "SEGMENT_BY"
-            print(f"[7] Upgraded UNKNOWN → SEGMENT_BY")
+            print(f"[7] Upgraded UNKNOWN -> SEGMENT_BY")
 
         result["semantic_meta"] = {
             "applied": True,
@@ -455,6 +586,7 @@ class SemanticInterpreter:
 # ─────────────────────────────────────────────────────────────
 # Factory
 # ─────────────────────────────────────────────────────────────
+
 
 def create_semantic_interpreter(df, schema_mapper) -> SemanticInterpreter:
     """Factory function for SemanticInterpreter."""

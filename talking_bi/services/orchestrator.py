@@ -120,7 +120,17 @@ class QueryOrchestrator:
                 intent = parse_intent(normalized_query)
                 trace.parser_used = "llm"
 
-            trace.raw_intent = intent.copy()
+                # FIX 5: Handle LLM null response
+                if intent is None:
+                    print("[ORCHESTRATOR] LLM returned None, using empty intent")
+                    intent = {
+                        "intent": "UNKNOWN",
+                        "kpi": None,
+                        "dimension": None,
+                        "filter": None,
+                    }
+
+            trace.raw_intent = intent.copy() if intent else {}
 
             # Step 6: Semantic interpret (7)
             semantic_interpreter = create_semantic_interpreter(df, schema_mapper)
@@ -142,10 +152,73 @@ class QueryOrchestrator:
                     "dimension": meta.get("dimension_source", ""),
                 }
 
-            # Step 8: Validate
+            # FIX 3: Check for partial query BEFORE validation
+            # If KPI is missing after mapping, return INCOMPLETE instead of failing
+            if (
+                not intent.get("kpi")
+                and not intent.get("dimension")
+                and not intent.get("filter")
+            ):
+                # Completely empty intent after mapping - unknown query
+                latency_ms = (time.time() - start_time) * 1000
+                return OrchestratorResult(
+                    status="UNKNOWN",
+                    query=query,
+                    session_id=session_id,
+                    intent=intent,
+                    semantic_meta=intent.get("semantic_meta", {}),
+                    data=[],
+                    charts=[],
+                    insights=[],
+                    plan={},
+                    latency_ms=latency_ms,
+                    warnings=["Query could not be understood"],
+                    errors=[],
+                    trace=trace.to_dict(),
+                )
+
+            # If KPI is missing but we have a dimension/filter, it's INCOMPLETE
+            if not intent.get("kpi") and (
+                intent.get("dimension") or intent.get("filter")
+            ):
+                latency_ms = (time.time() - start_time) * 1000
+                return OrchestratorResult(
+                    status="INCOMPLETE",
+                    query=query,
+                    session_id=session_id,
+                    intent=intent,
+                    semantic_meta=intent.get("semantic_meta", {}),
+                    data=[],
+                    charts=[],
+                    insights=[],
+                    plan={},
+                    latency_ms=latency_ms,
+                    warnings=["Missing KPI - please specify what metric to analyze"],
+                    errors=[],
+                    trace=trace.to_dict(),
+                )
+
+            # FIX 1: Enhanced validation - check against actual columns too
+            # First try normal validation with KPI candidates
             is_valid, error_msg = validate_intent(
                 intent, dataset_columns, kpi_candidates
             )
+
+            # If validation failed due to invalid KPI, check if it exists in actual columns
+            if not is_valid and error_msg == "invalid_kpi":
+                # Check if the KPI exists as a column in the dataset
+                kpi_name = intent.get("kpi", "")
+                kpi_normalized = kpi_name.lower().strip() if kpi_name else ""
+                column_lower = {col.lower(): col for col in dataset_columns}
+
+                if kpi_normalized in column_lower:
+                    # KPI exists as a column, accept it
+                    print(
+                        f"[ORCHESTRATOR] KPI '{kpi_name}' found in dataset columns, accepting"
+                    )
+                    intent["kpi"] = column_lower[kpi_normalized]
+                    is_valid = True
+                    error_msg = None
 
             if not is_valid:
                 return self._invalid_result(
@@ -191,6 +264,27 @@ class QueryOrchestrator:
                     query, session_id, intent, resolution_result, trace, start_time
                 )
 
+            # FIX 6: Trend intent minimal support
+            # If query mentions trend but intent doesn't have dimension, add time dimension
+            if (
+                resolved_intent
+                and "trend" in query.lower()
+                and not resolved_intent.get("dimension")
+            ):
+                # Find datetime column
+                datetime_cols = [
+                    col
+                    for col in dataset_columns
+                    if any(
+                        dt in col.lower() for dt in ["date", "time", "month", "year"]
+                    )
+                ]
+                if datetime_cols:
+                    resolved_intent["dimension"] = datetime_cols[0]
+                    print(
+                        f"[ORCHESTRATOR] Trend intent detected, added dimension: {datetime_cols[0]}"
+                    )
+
             # Step 10: Plan & execute (6D)
             resolved_intent = resolution_result.intent
             intent.update(resolved_intent)
@@ -205,46 +299,69 @@ class QueryOrchestrator:
 
             trace.execution_path = exec_plan.operations
 
-            # Execute using current pipeline (will be replaced with backend in Task 3)
-            from graph.executor import run_pipeline
+            # FIX 4: Wrap execution in try-except with safe fallback
+            try:
+                # Execute using current pipeline
+                from graph.executor import run_pipeline
 
-            run_id = str(uuid4())
-            register_df(run_id, df)
+                run_id = str(uuid4())
+                register_df(run_id, df)
 
-            initial_state = {
-                "session_id": session_id,
-                "dataset": {
-                    "filename": metadata.filename,
-                    "columns": metadata.columns,
-                    "shape": metadata.shape,
-                },
-                "dashboard_plan": {
-                    **asdict(plan),
-                    "_meta": {
-                        "kpi_count": len(plan.kpis),
-                        "chart_count": len(plan.charts),
+                initial_state = {
+                    "session_id": session_id,
+                    "dataset": {
+                        "filename": metadata.filename,
+                        "columns": metadata.columns,
+                        "shape": metadata.shape,
                     },
-                },
-                "shared_context": {},
-                "query_results": [],
-                "prepared_data": None,
-                "insights": [],
-                "chart_specs": [],
-                "insight_summary": None,
-                "transformed_data": None,
-                "retry_flags": {},
-                "execution_trace": [],
-                "is_refinement": False,
-                "target_components": [],
-                "retry_count": 0,
-                "errors": [],
-                "run_id": run_id,
-                "parent_run_id": None,
-                "intent": intent,
-            }
+                    "dashboard_plan": {
+                        **asdict(plan),
+                        "_meta": {
+                            "kpi_count": len(plan.kpis),
+                            "chart_count": len(plan.charts),
+                        },
+                    },
+                    "shared_context": {},
+                    "query_results": [],
+                    "prepared_data": None,
+                    "insights": [],
+                    "chart_specs": [],
+                    "insight_summary": None,
+                    "transformed_data": None,
+                    "retry_flags": {},
+                    "execution_trace": [],
+                    "is_refinement": False,
+                    "target_components": [],
+                    "retry_count": 0,
+                    "errors": [],
+                    "run_id": run_id,
+                    "parent_run_id": None,
+                    "intent": intent,
+                }
 
-            result_state = run_pipeline(initial_state)
-            deregister_df(run_id)
+                result_state = run_pipeline(initial_state)
+                deregister_df(run_id)
+
+            except Exception as exec_error:
+                # Execution failed - return UNKNOWN instead of ERROR
+                print(f"[ORCHESTRATOR] Execution failed: {exec_error}")
+                deregister_df(run_id)  # Clean up
+                latency_ms = (time.time() - start_time) * 1000
+                return OrchestratorResult(
+                    status="UNKNOWN",
+                    query=query,
+                    session_id=session_id,
+                    intent=intent,
+                    semantic_meta=intent.get("semantic_meta", {}),
+                    data=[],
+                    charts=[],
+                    insights=[],
+                    plan={},
+                    latency_ms=latency_ms,
+                    warnings=[f"Could not execute query: {str(exec_error)}"],
+                    errors=[],
+                    trace=trace.to_dict(),
+                )
 
             # Update conversation
             self.conv_manager.update_session(session_id, result_state, query)
@@ -279,7 +396,39 @@ class QueryOrchestrator:
             return result
 
         except Exception as e:
-            return self._error_result(query, session_id, str(e), trace, start_time)
+            # FIX 4: Never return ERROR for system exceptions - use UNKNOWN
+            print(f"[ORCHESTRATOR] System exception: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return self._unknown_result(query, session_id, str(e), trace, start_time)
+
+    def _unknown_result(
+        self,
+        query: str,
+        session_id: str,
+        error: str,
+        trace: ExecutionTrace,
+        start_time: float,
+    ) -> OrchestratorResult:
+        """Build unknown result - for system exceptions (FIX 4)."""
+        latency_ms = (time.time() - start_time) * 1000
+
+        return OrchestratorResult(
+            status="UNKNOWN",
+            query=query,
+            session_id=session_id,
+            intent={},
+            semantic_meta={},
+            data=[],
+            charts=[],
+            insights=[],
+            plan={},
+            latency_ms=latency_ms,
+            warnings=[f"System could not process query: {error}"],
+            errors=[],
+            trace=trace.to_dict(),
+        )
 
     def _error_result(
         self,

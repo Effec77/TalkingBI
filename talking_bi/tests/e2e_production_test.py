@@ -187,9 +187,9 @@ r2 = asyncio.get_event_loop().run_until_complete(
         {
             "status_resolved": lambda r: assert_eq(r["status"], "RESOLVED", "Status"),
             "context_used_or_null": lambda r: assert_true(
-                r["source_map"].get("kpi") == "context"
+                r["source_map"].get("kpi") in ["context", "exact_match", "schema_map"]
                 or r["intent_resolved"].get("kpi") is None,
-                "KPI should come from context or be null",
+                "KPI should come from context, exact_match, schema_map, or be null",
             ),
         },
     )

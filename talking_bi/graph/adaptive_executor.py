@@ -50,6 +50,7 @@ from services.execution_planner import (
 # Result struct returned by adaptive_execute()
 # ─────────────────────────────────────────────────────────────
 
+
 @dataclass
 class AdaptiveResult:
     """
@@ -78,6 +79,7 @@ class AdaptiveResult:
 # Partial execution helpers (pure pandas, no LangGraph)
 # ─────────────────────────────────────────────────────────────
 
+
 def _apply_filter(df: pd.DataFrame, intent: Dict[str, Any]) -> pd.DataFrame:
     """
     Apply intent.filter to base_df.
@@ -85,11 +87,17 @@ def _apply_filter(df: pd.DataFrame, intent: Dict[str, Any]) -> pd.DataFrame:
     Currently uses column-value equality matching.
     Filter format examples: "Q4", "region=West", "2023".
 
+    FIX 2: Handles null/none/nan filters safely using isna().
+
     Returns filtered DataFrame (or original if no filter or parse fails).
     """
     filter_val = intent.get("filter")
     if not filter_val:
         return df.copy()
+
+    # FIX 2: Handle null/none/nan values
+    filter_str = str(filter_val).lower().strip()
+    is_null_filter = filter_str in ["null", "none", "nan"]
 
     dimension = intent.get("dimension")
 
@@ -98,22 +106,50 @@ def _apply_filter(df: pd.DataFrame, intent: Dict[str, Any]) -> pd.DataFrame:
         parts = str(filter_val).split("=", 1)
         col, val = parts[0].strip(), parts[1].strip()
         if col in df.columns:
+            # FIX 2: Handle null filter in column=value format
+            val_lower = val.lower().strip()
+            if val_lower in ["null", "none", "nan"]:
+                filtered = df[df[col].isna()]
+                print(f"[6D:filter] Applied {col}=NULL → {len(filtered)} rows")
+                return filtered if not filtered.empty else df.copy()
+
             filtered = df[df[col].astype(str).str.strip() == val]
             print(f"[6D:filter] Applied {col}={val} → {len(filtered)} rows")
             return filtered if not filtered.empty else df.copy()
 
     # If dimension is known, try filtering on it
     if dimension and dimension in df.columns:
-        filtered = df[df[dimension].astype(str).str.contains(str(filter_val), case=False, na=False)]
+        # FIX 2: Handle null filter on dimension
+        if is_null_filter:
+            filtered = df[df[dimension].isna()]
+            print(f"[6D:filter] Applied {dimension}=NULL → {len(filtered)} rows")
+            return filtered if not filtered.empty else df.copy()
+
+        filtered = df[
+            df[dimension]
+            .astype(str)
+            .str.contains(str(filter_val), case=False, na=False)
+        ]
         if not filtered.empty:
-            print(f"[6D:filter] Applied dimension filter '{filter_val}' on '{dimension}' → {len(filtered)} rows")
+            print(
+                f"[6D:filter] Applied dimension filter '{filter_val}' on '{dimension}' → {len(filtered)} rows"
+            )
             return filtered
 
     # Fallback: string search across all string columns
+    # FIX 2: Don't search for null in string columns, return unfiltered
+    if is_null_filter:
+        print(f"[6D:filter] Null filter without dimension — returning unfiltered")
+        return df.copy()
+
     for col in df.select_dtypes(include="object").columns:
-        filtered = df[df[col].astype(str).str.contains(str(filter_val), case=False, na=False)]
+        filtered = df[
+            df[col].astype(str).str.contains(str(filter_val), case=False, na=False)
+        ]
         if not filtered.empty:
-            print(f"[6D:filter] Applied fuzzy filter '{filter_val}' on '{col}' → {len(filtered)} rows")
+            print(
+                f"[6D:filter] Applied fuzzy filter '{filter_val}' on '{col}' → {len(filtered)} rows"
+            )
             return filtered
 
     print(f"[6D:filter] Could not apply filter '{filter_val}' — returning unfiltered")
@@ -181,17 +217,21 @@ def _build_prepared_data(
         try:
             result = _apply_groupby_aggregate(df, kpi, dimension)
             if isinstance(result, pd.DataFrame):
-                prepared.append({
-                    "kpi": kpi_name,
-                    "type": "timeseries",
-                    "data": result.to_dict(orient="records"),
-                })
+                prepared.append(
+                    {
+                        "kpi": kpi_name,
+                        "type": "timeseries",
+                        "data": result.to_dict(orient="records"),
+                    }
+                )
             else:
-                prepared.append({
-                    "kpi": kpi_name,
-                    "type": "scalar",
-                    "value": result,
-                })
+                prepared.append(
+                    {
+                        "kpi": kpi_name,
+                        "type": "scalar",
+                        "value": result,
+                    }
+                )
             print(f"[6D:aggregate] OK {kpi_name}")
         except Exception as e:
             print(f"[6D:aggregate] FAILED {kpi_name}: {e}")
@@ -245,13 +285,20 @@ def _build_insight_like_response(
         kpi = item.get("kpi", "")
         if item.get("type") == "scalar":
             val = item.get("value", 0)
-            insights.append({
-                "kpi": kpi,
-                "type": "scalar",
-                "details": {"value": val, "formatted": f"{val:,.2f}" if isinstance(val, float) else str(val)},
-                "confidence": 1.0,
-                "score": 1.0,
-            })
+            insights.append(
+                {
+                    "kpi": kpi,
+                    "type": "scalar",
+                    "details": {
+                        "value": val,
+                        "formatted": f"{val:,.2f}"
+                        if isinstance(val, float)
+                        else str(val),
+                    },
+                    "confidence": 1.0,
+                    "score": 1.0,
+                }
+            )
             chart_specs.append({"kpi": kpi, "type": "metric", "value": val})
 
         elif item.get("type") == "timeseries":
@@ -259,20 +306,26 @@ def _build_insight_like_response(
             if len(data) >= 2:
                 values = [r.get("value") for r in data if r.get("value") is not None]
                 if values:
-                    insights.append({
-                        "kpi": kpi,
-                        "type": "range",
-                        "details": {"min": min(values), "max": max(values), "points": len(data)},
-                        "confidence": min(1.0, len(data) / 5),
-                        "score": 0.8,
-                    })
+                    insights.append(
+                        {
+                            "kpi": kpi,
+                            "type": "range",
+                            "details": {
+                                "min": min(values),
+                                "max": max(values),
+                                "points": len(data),
+                            },
+                            "confidence": min(1.0, len(data) / 5),
+                            "score": 0.8,
+                        }
+                    )
 
     return {
-        "query_results": [],              # Not used in partial path
+        "query_results": [],  # Not used in partial path
         "prepared_data": prepared_data,
-        "transformed_data": [],           # Skipped in partial path
+        "transformed_data": [],  # Skipped in partial path
         "insights": insights,
-        "insight_summary": None,          # LLM optional layer — skipped
+        "insight_summary": None,  # LLM optional layer — skipped
         "chart_specs": chart_specs,
         "execution_trace": execution_trace,
         "errors": errors,
@@ -283,11 +336,12 @@ def _build_insight_like_response(
 # Main entry point
 # ─────────────────────────────────────────────────────────────
 
+
 def adaptive_execute(
     plan: ExecutionPlan,
     resolved_intent: Dict[str, Any],
     dashboard_plan: Dict[str, Any],
-    df: pd.DataFrame,                   # Raw DataFrame from session
+    df: pd.DataFrame,  # Raw DataFrame from session
     prev_state: Optional[ExecutionState],
     session_id: str,
     run_id: str,
@@ -497,7 +551,9 @@ def _execute_partial(
         trace.append(STEP_COMPUTE_KPI_1)
         trace.append(STEP_COMPUTE_KPI_2)
 
-        prepared_data = _build_compare_data(kpi_1_spec, kpi_2_spec, working_df, dimension)
+        prepared_data = _build_compare_data(
+            kpi_1_spec, kpi_2_spec, working_df, dimension
+        )
         trace.append(STEP_RENDER)
 
         pipeline_result = _build_insight_like_response(prepared_data, trace, errors)
@@ -532,10 +588,7 @@ def _execute_partial(
 
     pipeline_result = _build_insight_like_response(prepared_data, trace, errors)
 
-    print(
-        f"[6D:partial] Complete — "
-        f"ops={trace}, prepared={len(prepared_data)}"
-    )
+    print(f"[6D:partial] Complete — ops={trace}, prepared={len(prepared_data)}")
 
     return AdaptiveResult(
         base_df=new_base_df,

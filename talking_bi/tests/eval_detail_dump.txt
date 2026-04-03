@@ -1,0 +1,120 @@
+DATASET: hr
+  rows=13195  cols=8
+  success_rate=94.4%
+  avg_latency=5.27ms
+  p95_latency=24.23ms
+  semantic_usage=5.6%
+  partial_exec_rate=47.1%
+  failure_breakdown:
+    NONE: 9
+    SEMANTIC_REJECTION: 8
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=3/3
+    flow6_garbage: resolved=2/3
+
+DATASET: supply_chain
+  rows=14280  cols=9
+  success_rate=94.4%
+  avg_latency=7.12ms
+  p95_latency=33.29ms
+  semantic_usage=5.6%
+  partial_exec_rate=47.1%
+  failure_breakdown:
+    NONE: 9
+    SEMANTIC_REJECTION: 8
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=3/3
+    flow6_garbage: resolved=2/3
+
+DATASET: marketing
+  rows=11197  cols=9
+  success_rate=88.9%
+  avg_latency=3.16ms
+  p95_latency=14.63ms
+  semantic_usage=11.1%
+  partial_exec_rate=50.0%
+  failure_breakdown:
+    NONE: 9
+    SEMANTIC_REJECTION: 7
+    CONTEXT_MISSING: 1
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=2/3
+    flow6_garbage: resolved=2/3
+
+DATASET: banking
+  rows=20400  cols=8
+  success_rate=94.4%
+  avg_latency=5.82ms
+  p95_latency=15.56ms
+  semantic_usage=5.6%
+  partial_exec_rate=47.1%
+  failure_breakdown:
+    NONE: 9
+    SEMANTIC_REJECTION: 8
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=3/3
+    flow6_garbage: resolved=2/3
+
+DATASET: saas
+  rows=12180  cols=8
+  success_rate=94.4%
+  avg_latency=4.5ms
+  p95_latency=22.72ms
+  semantic_usage=11.1%
+  partial_exec_rate=47.1%
+  failure_breakdown:
+    NONE: 10
+    SEMANTIC_REJECTION: 7
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=3/3
+    flow6_garbage: resolved=2/3
+
+DATASET: manufacturing
+  rows=16320  cols=7
+  success_rate=94.4%
+  avg_latency=4.42ms
+  p95_latency=19.29ms
+  semantic_usage=11.1%
+  partial_exec_rate=47.1%
+  failure_breakdown:
+    NONE: 10
+    SEMANTIC_REJECTION: 7
+    AMBIGUOUS_QUERY: 1
+  flow_summary:
+    flow1_basic: resolved=3/3
+    flow2_semantic: resolved=3/3
+    flow3_noisy: resolved=3/3
+    flow4_edge: resolved=3/3
+    flow5_binary: resolved=3/3
+    flow6_garbage: resolved=2/3
+
+CRITICAL_ISSUES:
+  none
+
+SYSTEM_WEAKNESSES:
+  High AMBIGUOUS_QUERY failures (6) — UNKNOWN intents leaking through (expected for garbage flow)

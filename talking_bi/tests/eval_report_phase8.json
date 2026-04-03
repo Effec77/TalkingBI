@@ -1,0 +1,325 @@
+{
+  "metrics": {
+    "total_queries": 108,
+    "success_rate": 0.9352,
+    "avg_latency_ms": 5.05,
+    "p95_latency_ms": 25.23,
+    "semantic_usage_rate": 0.0833,
+    "partial_execution_rate": 0.4752
+  },
+  "failure_breakdown": {
+    "NONE": 56,
+    "SEMANTIC_REJECTION": 45,
+    "AMBIGUOUS_QUERY": 6,
+    "CONTEXT_MISSING": 1
+  },
+  "status_breakdown": {
+    "RESOLVED": 101,
+    "UNKNOWN": 6,
+    "INCOMPLETE": 1
+  },
+  "dataset_wise_performance": {
+    "hr": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.9444,
+        "failure_breakdown": {
+          "NONE": 9,
+          "SEMANTIC_REJECTION": 8,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 5.27,
+        "p95_latency_ms": 24.23,
+        "semantic_usage_rate": 0.0556,
+        "partial_execution_rate": 0.4706,
+        "status_breakdown": {
+          "RESOLVED": 17,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 13195,
+      "columns": 8,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    },
+    "supply_chain": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.9444,
+        "failure_breakdown": {
+          "NONE": 9,
+          "SEMANTIC_REJECTION": 8,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 7.12,
+        "p95_latency_ms": 33.29,
+        "semantic_usage_rate": 0.0556,
+        "partial_execution_rate": 0.4706,
+        "status_breakdown": {
+          "RESOLVED": 17,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 14280,
+      "columns": 9,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    },
+    "marketing": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.8889,
+        "failure_breakdown": {
+          "NONE": 9,
+          "SEMANTIC_REJECTION": 7,
+          "CONTEXT_MISSING": 1,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 3.16,
+        "p95_latency_ms": 14.63,
+        "semantic_usage_rate": 0.1111,
+        "partial_execution_rate": 0.5,
+        "status_breakdown": {
+          "RESOLVED": 16,
+          "INCOMPLETE": 1,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 11197,
+      "columns": 9,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 2
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    },
+    "banking": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.9444,
+        "failure_breakdown": {
+          "NONE": 9,
+          "SEMANTIC_REJECTION": 8,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 5.82,
+        "p95_latency_ms": 15.56,
+        "semantic_usage_rate": 0.0556,
+        "partial_execution_rate": 0.4706,
+        "status_breakdown": {
+          "RESOLVED": 17,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 20400,
+      "columns": 8,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    },
+    "saas": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.9444,
+        "failure_breakdown": {
+          "NONE": 10,
+          "SEMANTIC_REJECTION": 7,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 4.5,
+        "p95_latency_ms": 22.72,
+        "semantic_usage_rate": 0.1111,
+        "partial_execution_rate": 0.4706,
+        "status_breakdown": {
+          "RESOLVED": 17,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 12180,
+      "columns": 8,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    },
+    "manufacturing": {
+      "metrics": {
+        "total": 18,
+        "success_rate": 0.9444,
+        "failure_breakdown": {
+          "NONE": 10,
+          "SEMANTIC_REJECTION": 7,
+          "AMBIGUOUS_QUERY": 1
+        },
+        "avg_latency_ms": 4.42,
+        "p95_latency_ms": 19.29,
+        "semantic_usage_rate": 0.1111,
+        "partial_execution_rate": 0.4706,
+        "status_breakdown": {
+          "RESOLVED": 17,
+          "UNKNOWN": 1
+        }
+      },
+      "rows": 16320,
+      "columns": 7,
+      "flow_summary": {
+        "flow1_basic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow2_semantic": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow3_noisy": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow4_edge": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow5_binary": {
+          "total": 3,
+          "resolved": 3
+        },
+        "flow6_garbage": {
+          "total": 3,
+          "resolved": 2
+        }
+      }
+    }
+  },
+  "critical_issues": [],
+  "system_weaknesses": [
+    "High AMBIGUOUS_QUERY failures (6) \u2014 UNKNOWN intents leaking through (expected for garbage flow)"
+  ],
+  "observations": [
+    "Evaluated 108 queries across 6 datasets",
+    "Overall success rate: 93.5%",
+    "Semantic layer hit rate: 8.3%",
+    "Partial execution rate (of resolved): 47.5%",
+    "Average latency: 5.0ms",
+    "p95 latency: 25.2ms",
+    "[hr] success=94%, avg_latency=5.3ms",
+    "[supply_chain] success=94%, avg_latency=7.1ms",
+    "[marketing] success=89%, avg_latency=3.2ms",
+    "[banking] success=94%, avg_latency=5.8ms",
+    "[saas] success=94%, avg_latency=4.5ms",
+    "[manufacturing] success=94%, avg_latency=4.4ms"
+  ]
+}

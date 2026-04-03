@@ -218,9 +218,24 @@ class ExecutionPlanner:
         # ── DIFF ──────────────────────────────────────────────────────
         diff = compute_intent_diff(prev_intent, curr_intent)
 
-        # ── RULE 1: intent type changed → full reset ──────────────────
+        # ── RULE 1: intent type changed ───────────────────────────────
+        # Special case: SEGMENT_BY → FILTER can reuse base_df because
+        # filters always apply on top of raw data — no reload needed.
         if diff["intent_changed"]:
-            return _full_run(f"intent_changed: {prev_intent.get('intent')} → {curr_intent.get('intent')}")
+            curr_type = curr_intent.get("intent", "")
+            if (
+                curr_type == "FILTER"
+                and prev_state.base_df is not None
+            ):
+                return _partial(
+                    reuse=REUSE_BASE_DF,
+                    steps=[STEP_FILTER, STEP_GROUPBY, STEP_AGGREGATE],
+                    reason="reuse_base_df_for_filter",
+                )
+            # All other intent type changes → full reset
+            return _full_run(
+                f"intent_changed: {prev_intent.get('intent')} → {curr_intent.get('intent')}"
+            )
 
         # ── COMPARE: first-class handling ─────────────────────────────
         # COMPARE always needs both KPIs computed over filtered data.

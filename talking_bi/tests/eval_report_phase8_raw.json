@@ -1,0 +1,1623 @@
+{
+  "metrics": {
+    "total": 108,
+    "success_rate": 0.9352,
+    "failure_breakdown": {
+      "NONE": 56,
+      "SEMANTIC_REJECTION": 45,
+      "AMBIGUOUS_QUERY": 6,
+      "CONTEXT_MISSING": 1
+    },
+    "avg_latency_ms": 5.05,
+    "p95_latency_ms": 25.23,
+    "semantic_usage_rate": 0.0833,
+    "partial_execution_rate": 0.4752,
+    "status_breakdown": {
+      "RESOLVED": 101,
+      "UNKNOWN": 6,
+      "INCOMPLETE": 1
+    }
+  },
+  "records": [
+    {
+      "query": "show salary",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.15,
+      "failure_type": null
+    },
+    {
+      "query": "by department",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.85,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare salary with performance_score",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Salary",
+        "kpi_2": "performance_score",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.97,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.54,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.71,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by department",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.23,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "salary numbers",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.85,
+      "failure_type": null
+    },
+    {
+      "query": "department wise",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.44,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter Engineering",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Salary",
+        "dimension": "department",
+        "filter": "Engineering"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 5.74,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show salary",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.59,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 24.23,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by department",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": "department",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 30.71,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show attrition_flag",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Attrition Flag",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.68,
+      "failure_type": null
+    },
+    {
+      "query": "by department",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Attrition Flag",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.91,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare attrition_flag with salary",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Attrition Flag",
+        "kpi_2": "Salary",
+        "dimension": "department",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.79,
+      "failure_type": null
+    },
+    {
+      "query": "show salary",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.02,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "hr",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.07,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show salary",
+      "dataset": "hr",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Salary",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.4,
+      "failure_type": null
+    },
+    {
+      "query": "show delivery_time",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.0,
+      "failure_type": null
+    },
+    {
+      "query": "by supplier",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.51,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare delivery_time with inventory_level",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Delivery Time",
+        "kpi_2": "inventory_level",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.67,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.69,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.74,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by supplier",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.46,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "delivery_time numbers",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.49,
+      "failure_type": null
+    },
+    {
+      "query": "supplier wise",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.38,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter Supplier_A",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Delivery Time",
+        "dimension": "supplier",
+        "filter": "Supplier_A"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 29.19,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show delivery_time",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.75,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 36.2,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by supplier",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": "supplier",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 33.29,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show delay_flag",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delay Flag",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.93,
+      "failure_type": null
+    },
+    {
+      "query": "by supplier",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delay Flag",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.44,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare delay_flag with delivery_time",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Delay Flag",
+        "kpi_2": "delivery_time",
+        "dimension": "supplier",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.98,
+      "failure_type": null
+    },
+    {
+      "query": "show delivery_time",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.01,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "supply_chain",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.18,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show delivery_time",
+      "dataset": "supply_chain",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Delivery Time",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.31,
+      "failure_type": null
+    },
+    {
+      "query": "show revenue",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.08,
+      "failure_type": null
+    },
+    {
+      "query": "by channel",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.24,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare revenue with clicks",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Revenue",
+        "kpi_2": "Clicks",
+        "dimension": "channel",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.19,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.57,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 0.62,
+      "failure_type": null
+    },
+    {
+      "query": "by channel",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.86,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "revenue numbers",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.9,
+      "failure_type": null
+    },
+    {
+      "query": "channel wise",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.06,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter Email",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": "Email"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.61,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show revenue",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.91,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 14.63,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by channel",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 18.32,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show revenue",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.0,
+      "failure_type": null
+    },
+    {
+      "query": "by channel",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": "channel",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.2,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare revenue with revenue",
+      "dataset": "marketing",
+      "status": "INCOMPLETE",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Revenue",
+        "kpi_2": "Revenue"
+      },
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.07,
+      "failure_type": "CONTEXT_MISSING"
+    },
+    {
+      "query": "show revenue",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.13,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "marketing",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.07,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show revenue",
+      "dataset": "marketing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Revenue",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.5,
+      "failure_type": null
+    },
+    {
+      "query": "show amount",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.64,
+      "failure_type": null
+    },
+    {
+      "query": "by transaction_type",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.73,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare amount with fraud_flag",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Amount",
+        "kpi_2": "fraud_flag",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.84,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.64,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.16,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by transaction_type",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.08,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "amount numbers",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.63,
+      "failure_type": null
+    },
+    {
+      "query": "transaction_type wise",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.34,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter purchase",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Amount",
+        "dimension": "transaction_type",
+        "filter": "purchase"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 39.24,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show amount",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.91,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 8.77,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by transaction_type",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": "transaction_type",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 15.56,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show fraud_flag",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Fraud Flag",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.44,
+      "failure_type": null
+    },
+    {
+      "query": "by transaction_type",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Fraud Flag",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.95,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare fraud_flag with amount",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Fraud Flag",
+        "kpi_2": "Amount",
+        "dimension": "transaction_type",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 5.8,
+      "failure_type": null
+    },
+    {
+      "query": "show amount",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.23,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "banking",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.1,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show amount",
+      "dataset": "banking",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Amount",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.68,
+      "failure_type": null
+    },
+    {
+      "query": "show mrr",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.43,
+      "failure_type": null
+    },
+    {
+      "query": "by subscription_plan",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.97,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare mrr with feature_usage",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Mrr",
+        "kpi_2": "feature_usage",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.04,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Feature Usage",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.01,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.49,
+      "failure_type": null
+    },
+    {
+      "query": "by subscription_plan",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.88,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "mrr numbers",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.85,
+      "failure_type": null
+    },
+    {
+      "query": "subscription_plan wise",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.62,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter pro",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": "pro"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.86,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show mrr",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.12,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 22.72,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by subscription_plan",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 28.67,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show churn_flag",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Churn Flag",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.04,
+      "failure_type": null
+    },
+    {
+      "query": "by subscription_plan",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Churn Flag",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.58,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare churn_flag with mrr",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Churn Flag",
+        "kpi_2": "Mrr",
+        "dimension": "subscription_plan",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.99,
+      "failure_type": null
+    },
+    {
+      "query": "show mrr",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.16,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "saas",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.07,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show mrr",
+      "dataset": "saas",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Mrr",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.52,
+      "failure_type": null
+    },
+    {
+      "query": "show output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.7,
+      "failure_type": null
+    },
+    {
+      "query": "by shift",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.72,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare output_units with defect_count",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Output Units",
+        "kpi_2": "defect_count",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.4,
+      "failure_type": null
+    },
+    {
+      "query": "show performance",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 1.1,
+      "failure_type": null
+    },
+    {
+      "query": "show growth",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": true,
+      "latency_ms": 0.59,
+      "failure_type": null
+    },
+    {
+      "query": "by shift",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.55,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "output_units numbers",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.38,
+      "failure_type": null
+    },
+    {
+      "query": "shift wise",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 2.79,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "filter morning",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": "morning"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 5.76,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.16,
+      "failure_type": null
+    },
+    {
+      "query": "filter null",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "FILTER",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": "null"
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 19.29,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "by shift",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": "null"
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 25.23,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "show output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.19,
+      "failure_type": null
+    },
+    {
+      "query": "by shift",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 3.24,
+      "failure_type": "SEMANTIC_REJECTION"
+    },
+    {
+      "query": "compare output_units with output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "COMPARE",
+        "kpi_1": "Output Units",
+        "kpi_2": "output_units",
+        "dimension": "shift",
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 4.44,
+      "failure_type": null
+    },
+    {
+      "query": "show output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "FULL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 1.42,
+      "failure_type": null
+    },
+    {
+      "query": "asdfgh",
+      "dataset": "manufacturing",
+      "status": "UNKNOWN",
+      "intent": null,
+      "execution_mode": null,
+      "semantic_applied": false,
+      "latency_ms": 0.06,
+      "failure_type": "AMBIGUOUS_QUERY"
+    },
+    {
+      "query": "show output_units",
+      "dataset": "manufacturing",
+      "status": "RESOLVED",
+      "intent": {
+        "intent": "SEGMENT_BY",
+        "kpi": "Output Units",
+        "dimension": null,
+        "filter": null
+      },
+      "execution_mode": "PARTIAL_RUN",
+      "semantic_applied": false,
+      "latency_ms": 0.48,
+      "failure_type": null
+    }
+  ]
+}

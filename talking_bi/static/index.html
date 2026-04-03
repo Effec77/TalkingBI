@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Talking BI</title>
+    
+    <!-- Plotly.js for charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: #1a1a2e;
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .btn {
+            background: #4a4a6a;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #6a6a8a;
+        }
+        
+        .btn-primary {
+            background: #4a90d9;
+        }
+        
+        .btn-primary:hover {
+            background: #3a80c9;
+        }
+        
+        /* Main Content */
+        .main {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* Chart Area */
+        .chart-container {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: white;
+        }
+        
+        .chart-wrapper {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            padding: 1rem;
+        }
+        
+        .chart-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+        
+        .chart-div {
+            width: 100%;
+            height: 400px;
+        }
+        
+        /* Insights Panel */
+        .insights-panel {
+            width: 350px;
+            background: white;
+            border-left: 1px solid #e0e0e0;
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+        
+        .insights-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+        
+        .insight-card {
+            background: #f8f9fa;
+            border-left: 4px solid #4a90d9;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 4px;
+        }
+        
+        .insight-type {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: #4a90d9;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .insight-text {
+            font-size: 0.875rem;
+            line-height: 1.5;
+            color: #333;
+        }
+        
+        /* Input Area */
+        .input-area {
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            padding: 1rem 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+        
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: #f5f5f5;
+            border-radius: 24px;
+            padding: 0.5rem 1rem;
+        }
+        
+        .input-prompt {
+            color: #666;
+            margin-right: 0.5rem;
+            font-weight: 500;
+        }
+        
+        .query-input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 1rem;
+            outline: none;
+            padding: 0.5rem;
+        }
+        
+        .query-input::placeholder {
+            color: #999;
+        }
+        
+        /* Status Bar */
+        .status-bar {
+            background: #f0f0f0;
+            padding: 0.5rem 2rem;
+            font-size: 0.875rem;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #4caf50;
+        }
+        
+        .status-dot.processing {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Upload overlay */
+        .upload-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .upload-dialog {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+        }
+        
+        .upload-dialog h2 {
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+        
+        .upload-dialog p {
+            margin-bottom: 2rem;
+            color: #666;
+        }
+        
+        .file-input-wrapper {
+            margin-bottom: 1rem;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .file-label {
+            display: block;
+            padding: 2rem;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        
+        .file-label:hover {
+            border-color: #4a90d9;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Upload Overlay (shown initially) -->
+    <div id="uploadOverlay" class="upload-overlay">
+        <div class="upload-dialog">
+            <h2>📊 Talking BI</h2>
+            <p>Upload a CSV file to start analyzing your data.</p>
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept=".csv">
+                <label for="fileInput" class="file-label">
+                    Click to select CSV file<br>
+                    <small>or drag and drop here</small>
+                </label>
+            </div>
+            <button id="uploadBtn" class="btn btn-primary" style="width: 100%;">
+                Upload Dataset
+            </button>
+        </div>
+    </div>
+
+    <!-- Main App (hidden initially) -->
+    <div id="mainApp" class="hidden">
+        <!-- Header -->
+        <header class="header">
+            <h1>Talking BI</h1>
+            <div class="header-controls">
+                <span id="sessionId" style="font-size: 0.875rem; color: #aaa;"></span>
+                <button id="resetBtn" class="btn">Reset Session</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="main">
+            <!-- Chart Area -->
+            <div class="chart-container">
+                <div id="chartsArea">
+                    <div style="text-align: center; padding: 4rem; color: #999;">
+                        <p>Ask a question about your data to see visualizations here.</p>
+                        <p style="font-size: 0.875rem; margin-top: 1rem;">
+                            Try: "show revenue", "by region", "compare with quantity"
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights Panel -->
+            <div class="insights-panel">
+                <h3 class="insights-title">💡 Insights</h3>
+                <div id="insightsArea">
+                    <p style="color: #999; font-size: 0.875rem;">
+                        Insights will appear here after you ask a question.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <span class="input-prompt">&gt;</span>
+                <input 
+                    type="text" 
+                    id="queryInput" 
+                    class="query-input" 
+                    placeholder="Ask a question about your data..."
+                    autocomplete="off"
+                >
+            </div>
+            <button id="sendBtn" class="btn btn-primary">Send</button>
+        </div>
+
+        <!-- Status Bar -->
+        <div class="status-bar">
+            <div class="status-indicator">
+                <span id="statusDot" class="status-dot"></span>
+                <span id="statusText">Ready</span>
+            </div>
+            <div>
+                <span id="latencyDisplay"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let sessionId = null;
+        let isProcessing = false;
+
+        // DOM Elements
+        const uploadOverlay = document.getElementById('uploadOverlay');
+        const mainApp = document.getElementById('mainApp');
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const queryInput = document.getElementById('queryInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const sessionIdDisplay = document.getElementById('sessionId');
+        const chartsArea = document.getElementById('chartsArea');
+        const insightsArea = document.getElementById('insightsArea');
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const latencyDisplay = document.getElementById('latencyDisplay');
+
+        // Upload Dataset
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a CSV file');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                uploadBtn.textContent = 'Uploading...';
+                uploadBtn.disabled = true;
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Upload failed');
+                }
+
+                const data = await response.json();
+                sessionId = data.session_id;
+                sessionIdDisplay.textContent = `Session: ${sessionId.slice(0, 8)}...`;
+
+                // Show main app
+                uploadOverlay.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+                uploadBtn.textContent = 'Upload Dataset';
+                uploadBtn.disabled = false;
+            }
+        });
+
+        // Send Query
+        async function sendQuery() {
+            const query = queryInput.value.trim();
+            if (!query || isProcessing) return;
+
+            isProcessing = true;
+            updateStatus('Processing...', true);
+            sendBtn.disabled = true;
+
+            try {
+                const startTime = performance.now();
+
+                const response = await fetch(`/query/${sessionId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                const endTime = performance.now();
+
+                displayResults(result);
+                updateStatus('Ready', false);
+                latencyDisplay.textContent = `Latency: ${result.latency_ms?.toFixed(1) || (endTime - startTime).toFixed(0)}ms`;
+
+                queryInput.value = '';
+
+            } catch (error) {
+                updateStatus('Error', false);
+                alert('Query failed: ' + error.message);
+            } finally {
+                isProcessing = false;
+                sendBtn.disabled = false;
+            }
+        }
+
+        sendBtn.addEventListener('click', sendQuery);
+        queryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendQuery();
+        });
+
+        // Reset Session
+        resetBtn.addEventListener('click', async () => {
+            if (!sessionId) return;
+
+            try {
+                const response = await fetch(`/session/${sessionId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Reset failed:', error);
+            }
+        });
+
+        // Display Results
+        function displayResults(result) {
+            // Clear previous results
+            chartsArea.innerHTML = '';
+            insightsArea.innerHTML = '';
+
+            // Show status if not resolved
+            if (result.status !== 'RESOLVED') {
+                chartsArea.innerHTML = `
+                    <div style="padding: 2rem; background: #fff3e0; border-radius: 8px;">
+                        <h3>Status: ${result.status}</h3>
+                        <p>${result.errors?.[0] || 'Query could not be resolved'}</p>
+                        ${result.warnings?.length ? `
+                            <ul style="margin-top: 1rem;">
+                                ${result.warnings.map(w => `<li>${w}</li>`).join('')}
+                            </ul>
+                        ` : ''}
+                    </div>
+                `;
+                return;
+            }
+
+            // Display Charts
+            if (result.charts && result.charts.length > 0) {
+                result.charts.forEach((chart, index) => {
+                    const chartDiv = document.createElement('div');
+                    chartDiv.className = 'chart-wrapper';
+                    chartDiv.innerHTML = `
+                        <div class="chart-title">${chart.kpi || 'Chart'}</div>
+                        <div id="chart-${index}" class="chart-div"></div>
+                    `;
+                    chartsArea.appendChild(chartDiv);
+
+                    // Render with Plotly
+                    if (chart.spec) {
+                        Plotly.newPlot(`chart-${index}`, chart.spec.data, chart.spec.layout, {responsive: true});
+                    }
+                });
+            }
+
+            // Display Data Table (if timeseries)
+            if (result.data && result.data.length > 0) {
+                const tableDiv = document.createElement('div');
+                tableDiv.className = 'chart-wrapper';
+                
+                const firstItem = result.data[0];
+                if (firstItem.data) {
+                    // Create simple table preview
+                    const previewData = firstItem.data.slice(0, 10);
+                    const columns = Object.keys(previewData[0] || {});
+                    
+                    tableDiv.innerHTML = `
+                        <div class="chart-title">${firstItem.kpi} - Data Preview</div>
+                        <table style="width: 100%; font-size: 0.875rem; border-collapse: collapse;">
+                            <thead>
+                                <tr style="background: #f5f5f5;">
+                                    ${columns.map(col => `<th style="padding: 0.5rem; text-align: left; border-bottom: 2px solid #ddd;">${col}</th>`).join('')}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${previewData.map(row => `
+                                    <tr>
+                                        ${columns.map(col => `<td style="padding: 0.5rem; border-bottom: 1px solid #eee;">${row[col]}</td>`).join('')}
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    `;
+                    chartsArea.appendChild(tableDiv);
+                }
+            }
+
+            // Display Insights
+            if (result.insights && result.insights.length > 0) {
+                result.insights.slice(0, 5).forEach(insight => {
+                    const card = document.createElement('div');
+                    card.className = 'insight-card';
+                    card.innerHTML = `
+                        <div class="insight-type">${insight.type || 'INSIGHT'}</div>
+                        <div class="insight-text">${insight.summary || insight.text || JSON.stringify(insight)}</div>
+                    `;
+                    insightsArea.appendChild(card);
+                });
+            } else {
+                insightsArea.innerHTML = '<p style="color: #999;">No insights generated for this query.</p>';
+            }
+        }
+
+        // Update Status
+        function updateStatus(text, processing) {
+            statusText.textContent = text;
+            if (processing) {
+                statusDot.classList.add('processing');
+            } else {
+                statusDot.classList.remove('processing');
+            }
+        }
+    </script>
+</body>
+</html>

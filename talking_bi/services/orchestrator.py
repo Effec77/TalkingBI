@@ -22,7 +22,7 @@ from services.intent_validator import validate_intent
 from services.semantic_interpreter import create_semantic_interpreter
 from services.context_resolver import create_resolver, ResolutionStatus
 from services.execution_planner import ExecutionPlanner
-from services.evaluator import evaluator_singleton, timed_record
+from services.evaluator import get_evaluator, timed_record
 from graph.df_registry import register_df, deregister_df
 
 
@@ -274,7 +274,7 @@ class QueryOrchestrator:
             )
 
             # Record in evaluator
-            self._record_evaluator(query, session_id, result, exec_plan.mode)
+            self._record_evaluator(query, session_id, result)
 
             return result
 
@@ -367,23 +367,18 @@ class QueryOrchestrator:
         )
 
     def _record_evaluator(
-        self,
-        query: str,
-        session_id: str,
-        result: OrchestratorResult,
-        execution_mode: str,
+        self, query: str, session_id: str, result: OrchestratorResult
     ):
         """Record query in evaluator."""
         try:
-            evaluator_singleton.record(
+            evaluator = get_evaluator()
+            # Convert OrchestratorResult to dict for evaluator
+            result_dict = result.to_dict()
+            evaluator.record(
                 query=query,
                 dataset=session_id,
-                status=result.status,
-                intent=result.intent,
-                execution_mode=execution_mode,
-                semantic_applied=result.semantic_meta.get("applied", False),
+                result=result_dict,
                 latency_ms=result.latency_ms,
-                failure_type=None if result.status == "RESOLVED" else result.status,
             )
         except Exception as e:
             print(f"[Orchestrator] Evaluator recording failed: {e}")

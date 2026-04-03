@@ -59,10 +59,10 @@ async def run_stress_turn(session_id, flow, dataset, turn_num, query, checks):
             "turn": turn_num,
             "query": query,
             "status": response.get("status"),
-            "intent_resolved": response.get("intent_resolved"),
-            "source_map": response.get("source_map"),
-            "charts": response.get("charts_generated", 0),
-            "insights": response.get("insights_generated", 0),
+            "intent_resolved": response.get("intent"),  # alias for compatibility
+            "source_map": response.get("trace", {}).get("mapped_fields", {}),
+            "charts": len(response.get("charts", [])),
+            "insights": len(response.get("insights", [])),
             "errors": response.get("errors", []),
             "warnings": response.get("warnings", []),
         }

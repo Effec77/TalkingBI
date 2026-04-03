@@ -47,7 +47,7 @@ async def test1():
     try:
         response = await query_endpoint(session_id, payload)
         print(f"  Status: {response.get('status')}")
-        print(f"  Charts: {response.get('charts_generated', 0)}")
+        print(f"  Charts: {len(response.get('charts', []))}")
         print(f"  [OK] No KPI attribute error")
         return True
     except Exception as e:
@@ -66,8 +66,8 @@ async def test2():
     try:
         response = await query_endpoint(session_id, payload)
         print(f"  Status: {response.get('status')}")
-        print(f"  Source Map: {response.get('source_map')}")
-        if response.get("source_map", {}).get("kpi") == "context":
+        print(f"  Source Map: {response.get('trace', {}).get('mapped_fields', {})}")
+        if response.get("trace", {}).get("mapped_fields", {}).get("kpi") == "context":
             print(f"  [OK] Context inheritance working")
         else:
             print(f"  [INFO] No context (may be expected)")
@@ -93,7 +93,7 @@ async def test3():
     # Then compare
     r2 = await query_endpoint(session_id, QueryPayload(query="compare with quantity"))
     print(f"  T2: {r2.get('status')}")
-    intent = r2.get("intent_resolved", {})
+    intent = r2.get("intent", {})
     print(f"      kpi_1: {intent.get('kpi_1')}, kpi_2: {intent.get('kpi_2')}")
 
     if r2.get("status") == "RESOLVED" and intent.get("kpi_1") and intent.get("kpi_2"):

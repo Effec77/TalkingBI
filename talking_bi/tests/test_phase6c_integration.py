@@ -68,13 +68,13 @@ async def run_api_turn(turn_num, query, expected_status, validation_checks=None)
             "turn": turn_num,
             "query": query,
             "status": response.get("status"),
-            "intent_raw": response.get("intent_raw"),
-            "intent_resolved": response.get("intent_resolved"),
-            "source_map": response.get("source_map"),
+            "intent_raw": response.get("intent"),  # API returns intent (resolved)
+            "intent_resolved": response.get("intent"),  # alias for compatibility
+            "source_map": response.get("trace", {}).get("mapped_fields", {}),
             "warnings": response.get("warnings", []),
-            "charts_generated": response.get("charts_generated", 0),
-            "insights_generated": response.get("insights_generated", 0),
-            "execution_trace": response.get("execution_trace", []),
+            "charts_generated": len(response.get("charts", [])),
+            "insights_generated": len(response.get("insights", [])),
+            "execution_trace": response.get("trace", {}),
             "errors": response.get("errors", []),
         }
 

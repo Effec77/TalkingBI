@@ -57,13 +57,13 @@ async def run_turn(flow, dataset, session_id, turn_num, query, expected_checks):
             "turn": turn_num,
             "query": query,
             "status": response.get("status"),
-            "intent_raw": response.get("intent_raw"),
-            "intent_resolved": response.get("intent_resolved"),
-            "source_map": response.get("source_map"),
+            "intent": response.get("intent"),
+            "intent_resolved": response.get("intent"),  # alias for compatibility
+            "source_map": response.get("trace", {}).get("mapped_fields", {}),
             "warnings": response.get("warnings", []),
-            "charts": response.get("charts_generated", 0),
-            "insights": response.get("insights_generated", 0),
-            "execution_trace": response.get("execution_trace", []),
+            "charts": len(response.get("charts", [])),
+            "insights": len(response.get("insights", [])),
+            "execution_trace": response.get("trace", {}),
             "errors": response.get("errors", []),
         }
 

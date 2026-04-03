@@ -264,6 +264,9 @@ class QueryOrchestrator:
                     query, session_id, intent, resolution_result, trace, start_time
                 )
 
+            # Step 10: Plan & execute (6D)
+            resolved_intent = resolution_result.intent
+
             # FIX 6: Trend intent minimal support
             # If query mentions trend but intent doesn't have dimension, add time dimension
             if (
@@ -285,8 +288,6 @@ class QueryOrchestrator:
                         f"[ORCHESTRATOR] Trend intent detected, added dimension: {datetime_cols[0]}"
                     )
 
-            # Step 10: Plan & execute (6D)
-            resolved_intent = resolution_result.intent
             intent.update(resolved_intent)
 
             # Get previous execution state for planning

@@ -24,6 +24,10 @@ from services.context_resolver import create_resolver, ResolutionStatus
 from services.execution_planner import ExecutionPlanner
 from services.evaluator import get_evaluator, timed_record
 from graph.df_registry import register_df, deregister_df
+from services.cache import query_cache, get_query_key, llm_cache
+from services.postgres_backend import PostgresBackend
+from services.execution_backend import PandasBackend
+
 
 
 class QueryOrchestrator:
@@ -81,6 +85,24 @@ class QueryOrchestrator:
                     query, session_id, "Session metadata not found", trace, start_time
                 )
 
+            # TASK 5: QUERY RESULT CACHE (High Impact)
+            from services.query_normalizer import create_normalizer
+            norm_pre = create_normalizer(metadata.columns, [])
+            norm_q, _ = norm_pre.normalize(query)
+            q_key = get_query_key(norm_q, metadata.filename)
+            
+            from services.cache import USE_CACHE
+            if USE_CACHE and q_key in query_cache:
+                print(f"[ORCHESTRATOR] ⚡ Query cache hit!")
+                from services.cache import stats
+                stats.query_cache_hits += 1
+                trace.cache_hit = True
+                cached_result = query_cache[q_key]
+                # Update trace on cached result before returning
+                cached_result.trace["cache_hit"] = True 
+                return cached_result
+            trace.cache_hit = False
+
             # Get conversation context
             conv_session = self.conv_manager.get_or_create(session_id)
             context_history = conv_session.run_history if conv_session else []
@@ -108,7 +130,61 @@ class QueryOrchestrator:
             # Step 4: Deterministic override (6G)
             schema_mapper = create_schema_mapper(df, kpi_candidates)
             detector = DeterministicIntentDetector(schema_mapper, context_history)
+            # Rule 4: Trend detection
             deterministic_intent = detector.detect(normalized_query)
+            # Rule 1/2/3/4/6: Robust Trend Detection
+            query_lower = normalized_query.lower()
+            force_trend = any(k in query_lower for k in ["trend", "trends", "over time"])
+            
+            detected_date_col = None
+            if force_trend:
+                # Priority 1: Profile-based datetime detection
+                from services.dataset_profiler import profile_dataset
+                profile = profile_dataset(df)
+                if profile.datetime_columns:
+                    detected_date_col = profile.datetime_columns[0]
+                
+                # Priority 2: Name-based fallback
+                if not detected_date_col:
+                    for col in df.columns:
+                        if any(k in col.lower() for k in ["date", "time", "month", "year"]):
+                            detected_date_col = col
+                            break
+                
+                if detected_date_col:
+                    print(f"[ORCHESTRATOR] 📈 Trend detected, using dimension: {detected_date_col}")
+                    trace.trend_detected = True
+                    trace.trend_dimension = detected_date_col
+                    
+                    # Rule 2: Force Intent
+                    trend_intent = {
+                        "intent": "SEGMENT_BY",
+                        "dimension": detected_date_col,
+                        "kpi": None,
+                        "filter": None
+                    }
+                    
+                    # Ensure deterministic_intent reflects this
+                    if deterministic_intent:
+                        deterministic_intent.update(trend_intent)
+                    else:
+                        deterministic_intent = trend_intent
+                else:
+                    # Rule 4: Fail Safe
+                    print("[ORCHESTRATOR] ⚠️ Trend requested but no date column found")
+                    return OrchestratorResult(
+                        status="INCOMPLETE",
+                        query=query,
+                        session_id=session_id,
+                        intent={"intent": "SEGMENT_BY", "kpi": None, "dimension": None},
+                        semantic_meta={},
+                        data=[],
+                        charts=[],
+                        warnings=["No time dimension found for trend analysis"],
+                        trace=trace.to_dict(),
+                        latency_ms=(time.time() - start_time) * 1000
+                    )
+            # End Trend Logic
 
             if deterministic_intent:
                 intent = deterministic_intent
@@ -144,6 +220,13 @@ class QueryOrchestrator:
 
             # Step 7: Schema map (6F)
             intent = schema_mapper.map_intent(intent)
+            
+            # FIX 1: KPI Validation debug trace
+            trace.kpi_validation = {
+                "input": intent.get("kpi"),
+                "matched_column": intent.get("kpi") if intent.get("kpi") in df.columns else None,
+                "columns_available": list(df.columns)
+            }
 
             if intent.get("mapping_meta"):
                 meta = intent["mapping_meta"]
@@ -152,51 +235,7 @@ class QueryOrchestrator:
                     "dimension": meta.get("dimension_source", ""),
                 }
 
-            # FIX 3: Check for partial query BEFORE validation
-            # If KPI is missing after mapping, return INCOMPLETE instead of failing
-            if (
-                not intent.get("kpi")
-                and not intent.get("dimension")
-                and not intent.get("filter")
-            ):
-                # Completely empty intent after mapping - unknown query
-                latency_ms = (time.time() - start_time) * 1000
-                return OrchestratorResult(
-                    status="UNKNOWN",
-                    query=query,
-                    session_id=session_id,
-                    intent=intent,
-                    semantic_meta=intent.get("semantic_meta", {}),
-                    data=[],
-                    charts=[],
-                    insights=[],
-                    plan={},
-                    latency_ms=latency_ms,
-                    warnings=["Query could not be understood"],
-                    errors=[],
-                    trace=trace.to_dict(),
-                )
-
-            # If KPI is missing but we have a dimension/filter, it's INCOMPLETE
-            if not intent.get("kpi") and (
-                intent.get("dimension") or intent.get("filter")
-            ):
-                latency_ms = (time.time() - start_time) * 1000
-                return OrchestratorResult(
-                    status="INCOMPLETE",
-                    query=query,
-                    session_id=session_id,
-                    intent=intent,
-                    semantic_meta=intent.get("semantic_meta", {}),
-                    data=[],
-                    charts=[],
-                    insights=[],
-                    plan={},
-                    latency_ms=latency_ms,
-                    warnings=["Missing KPI - please specify what metric to analyze"],
-                    errors=[],
-                    trace=trace.to_dict(),
-                )
+            # (Removed early partial intent check here, see after resolution)
 
             # FIX 1: Enhanced validation - check against actual columns too
             # First try normal validation with KPI candidates
@@ -212,14 +251,32 @@ class QueryOrchestrator:
                 column_lower = {col.lower(): col for col in dataset_columns}
 
                 if kpi_normalized in column_lower:
-                    # KPI exists as a column, accept it
+                    # KPI exists as a column exactly, accept it
                     print(
-                        f"[ORCHESTRATOR] KPI '{kpi_name}' found in dataset columns, accepting"
+                        f"[ORCHESTRATOR] KPI '{kpi_name}' found exactly in dataset columns, accepting"
                     )
                     intent["kpi"] = column_lower[kpi_normalized]
                     is_valid = True
                     error_msg = None
+                else:
+                    # Check substring match (e.g. 'total amount' in 'amount' or vice versa)
+                    for col_norm, col_raw in column_lower.items():
+                        if kpi_normalized in col_norm or col_norm in kpi_normalized:
+                            print(
+                                f"[ORCHESTRATOR] KPI '{kpi_name}' matches column '{col_raw}', accepting"
+                            )
+                            intent["kpi"] = col_raw
+                            is_valid = True
+                            error_msg = None
+                            break
 
+                        # Rule 1/6 Trace
+            trace.kpi_resolution = {
+                "input": intent.get("kpi"),
+                "resolved_to": intent.get("kpi") if is_valid else None,
+                "columns": list(df.columns)
+            }
+            
             if not is_valid:
                 return self._invalid_result(
                     query,
@@ -255,6 +312,7 @@ class QueryOrchestrator:
             resolution_result = resolver.resolve(intent, dashboard_plan_dict)
 
             trace.context_used = resolution_result.context_used
+            trace.context_applied = getattr(resolution_result, "context_applied", False)
             if resolution_result.context_used and resolution_result.intent:
                 trace.context_kpi_inherited = resolution_result.intent.get("kpi")
 
@@ -267,26 +325,72 @@ class QueryOrchestrator:
             # Step 10: Plan & execute (6D)
             resolved_intent = resolution_result.intent
 
+            # FIX 3: Context is resolved now. Check for partial query
+            if (
+                not resolved_intent.get("kpi")
+                and not resolved_intent.get("dimension")
+                and not resolved_intent.get("filter")
+            ):
+                latency_ms = (time.time() - start_time) * 1000
+                return OrchestratorResult(
+                    status="UNKNOWN",
+                    query=query,
+                    session_id=session_id,
+                    intent=resolved_intent,
+                    semantic_meta=intent.get("semantic_meta", {}),
+                    data=[],
+                    charts=[],
+                    insights=[],
+                    plan={},
+                    latency_ms=latency_ms,
+                    warnings=["Query could not be understood"],
+                    errors=[],
+                    trace=trace.to_dict(),
+                )
+
+            if not resolved_intent.get("kpi") and (
+                resolved_intent.get("dimension") or resolved_intent.get("filter")
+            ):
+                latency_ms = (time.time() - start_time) * 1000
+                return OrchestratorResult(
+                    status="INCOMPLETE",
+                    query=query,
+                    session_id=session_id,
+                    intent=resolved_intent,
+                    semantic_meta=intent.get("semantic_meta", {}),
+                    data=[],
+                    charts=[],
+                    insights=[],
+                    plan={},
+                    latency_ms=latency_ms,
+                    warnings=["Missing KPI - please specify what metric to analyze"],
+                    errors=[],
+                    trace=trace.to_dict(),
+                )
+
             # FIX 6: Trend intent minimal support
             # If query mentions trend but intent doesn't have dimension, add time dimension
-            if (
-                resolved_intent
-                and "trend" in query.lower()
-                and not resolved_intent.get("dimension")
-            ):
-                # Find datetime column
-                datetime_cols = [
-                    col
-                    for col in dataset_columns
-                    if any(
-                        dt in col.lower() for dt in ["date", "time", "month", "year"]
-                    )
-                ]
-                if datetime_cols:
-                    resolved_intent["dimension"] = datetime_cols[0]
-                    print(
-                        f"[ORCHESTRATOR] Trend intent detected, added dimension: {datetime_cols[0]}"
-                    )
+            if resolved_intent:
+                query_lower = query.lower()
+                is_trend = any(kw in query_lower for kw in ["trend", "trends", "over time"])
+                if is_trend:
+                    if not resolved_intent.get("dimension"):
+                        # Find datetime column
+                        datetime_cols = [
+                            col
+                            for col in dataset_columns
+                            if any(
+                                dt in col.lower() for dt in ["date", "time", "month", "year"]
+                            )
+                        ]
+                        if datetime_cols:
+                            resolved_intent["dimension"] = datetime_cols[0]
+                            print(
+                                f"[ORCHESTRATOR] Trend intent detected, added dimension: {datetime_cols[0]}"
+                            )
+                    
+                    # Force intent to SEGMENT_BY so UI renders line chart 
+                    resolved_intent["intent"] = "SEGMENT_BY"
 
             intent.update(resolved_intent)
 
@@ -302,46 +406,46 @@ class QueryOrchestrator:
 
             # FIX 4: Wrap execution in try-except with safe fallback
             try:
-                # Execute using current pipeline
-                from graph.executor import run_pipeline
-
-                run_id = str(uuid4())
-                register_df(run_id, df)
-
-                initial_state = {
-                    "session_id": session_id,
-                    "dataset": {
-                        "filename": metadata.filename,
-                        "columns": metadata.columns,
-                        "shape": metadata.shape,
+                # TASK 3: BACKEND SWITCHING
+                dashboard_plan_dict = {
+                    **asdict(plan),
+                    "_meta": {
+                        "kpi_count": len(plan.kpis),
+                        "chart_count": len(plan.charts),
                     },
-                    "dashboard_plan": {
-                        **asdict(plan),
-                        "_meta": {
-                            "kpi_count": len(plan.kpis),
-                            "chart_count": len(plan.charts),
-                        },
-                    },
-                    "shared_context": {},
-                    "query_results": [],
-                    "prepared_data": None,
-                    "insights": [],
-                    "chart_specs": [],
-                    "insight_summary": None,
-                    "transformed_data": None,
-                    "retry_flags": {},
-                    "execution_trace": [],
-                    "is_refinement": False,
-                    "target_components": [],
-                    "retry_count": 0,
-                    "errors": [],
-                    "run_id": run_id,
-                    "parent_run_id": None,
-                    "intent": intent,
                 }
-
-                result_state = run_pipeline(initial_state)
-                deregister_df(run_id)
+                # Execute using correct backend abstraction
+                USE_POSTGRES = False
+                if USE_POSTGRES and upload_session.get("use_postgres"):
+                    backend = PostgresBackend()
+                    adaptive_res_pg = backend.execute(
+                        plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
+                        df=df, prev_state=prev_state, session_id=session_id
+                    )
+                    backend_pd = PandasBackend()
+                    adaptive_res_pd = backend_pd.execute(
+                        plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
+                        df=df, prev_state=prev_state, session_id=session_id
+                    )
+                    # Check consistency
+                    if str(adaptive_res_pg.final_output) == str(adaptive_res_pd.final_output):
+                        adaptive_res = adaptive_res_pg
+                    else:
+                        adaptive_res = adaptive_res_pd
+                        trace.fallback_triggered = True
+                else:
+                    backend = PandasBackend()
+                    adaptive_res = backend.execute(
+                        plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
+                        df=df, prev_state=prev_state, session_id=session_id
+                    )
+                trace.backend_used = backend.name
+                
+                # Check if it fell back or executed purely in postgres
+                if hasattr(adaptive_res, "mode_used") and adaptive_res.mode_used == "postgres":
+                    trace.backend_used = "postgres"
+                
+                result_state = adaptive_res.pipeline_result
 
             except Exception as exec_error:
                 # Execution failed - return UNKNOWN instead of ERROR
@@ -473,7 +577,7 @@ class QueryOrchestrator:
         latency_ms = (time.time() - start_time) * 1000
 
         return OrchestratorResult(
-            status="INVALID",
+            status="AMBIGUOUS" if error == "ambiguous" else "UNKNOWN",
             query=query,
             session_id=session_id,
             intent=intent,

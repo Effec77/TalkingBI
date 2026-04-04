@@ -38,6 +38,7 @@ class ResolutionResult:
     missing_fields: List[str] = field(default_factory=list)
     ambiguity: Optional[Dict[str, Any]] = None
     context_used: bool = False
+    context_applied: bool = False
 
 
 class ContextResolver:
@@ -124,6 +125,14 @@ class ContextResolver:
             )
 
         kpi = parsed_intent.get("kpi")
+        # Rule 3: Context carry for KPI
+        context_applied = False
+        if not kpi:
+            last_context = self.get_last_resolved_context()
+            if last_context and last_context.get("kpi"):
+                kpi = last_context["kpi"]
+                context_applied = True
+                print(f"[6C] Context applied: KPI={kpi}")
         dimension = parsed_intent.get("dimension")
         filter_val = parsed_intent.get("filter")
 
@@ -248,7 +257,7 @@ class ContextResolver:
                 warnings=warnings,
                 missing_fields=missing_fields,
                 ambiguity=None,
-                context_used=context_used,
+                context_used=context_used, context_applied=context_applied,
             )
 
         # Success - add to context for future turns
@@ -261,7 +270,7 @@ class ContextResolver:
             warnings=warnings,
             missing_fields=[],
             ambiguity=None,
-            context_used=context_used,
+            context_used=context_used, context_applied=context_applied,
         )
 
     def _resolve_compare(
@@ -394,7 +403,7 @@ class ContextResolver:
                 warnings=warnings,
                 missing_fields=missing_fields,
                 ambiguity=None,
-                context_used=context_used,
+                context_used=context_used, context_applied=context_applied,
             )
 
         # Success - add to context
@@ -407,7 +416,7 @@ class ContextResolver:
             warnings=warnings,
             missing_fields=[],
             ambiguity=None,
-            context_used=context_used,
+            context_used=context_used, context_applied=context_applied,
         )
 
     def _is_ambiguous(self, term: str) -> bool:

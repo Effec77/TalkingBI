@@ -17,6 +17,7 @@ import re
 from typing import Dict, Optional
 from models.intent import Intent, VALID_INTENTS, INTENT_DESCRIPTIONS
 from services.llm_manager import LLMManager
+from services.cache import llm_cache, get_llm_key
 
 
 # Trend keywords for EXPLAIN_TREND detection
@@ -214,6 +215,13 @@ def parse_intent(query: str, llm_manager: Optional[LLMManager] = None) -> Intent
     if llm_manager is None:
         llm_manager = LLMManager()
 
+    # TASK 4: LLM RESPONSE CACHING
+    cache_key = get_llm_key(query)
+    if cache_key in llm_cache:
+        from services.cache import stats
+        stats.llm_cache_hits += 1
+        return llm_cache[cache_key]
+
     # Build prompt
     prompt = _build_prompt()
 
@@ -255,7 +263,7 @@ def parse_intent(query: str, llm_manager: Optional[LLMManager] = None) -> Intent
         intent = _post_process_intent(query, raw_intent)
 
         # Ensure all required fields present
-        return {
+        final_intent = {
             "intent": intent.get("intent", "UNKNOWN"),
             "kpi": intent.get("kpi") or None,
             "kpi_1": intent.get("kpi_1") or None,
@@ -263,6 +271,12 @@ def parse_intent(query: str, llm_manager: Optional[LLMManager] = None) -> Intent
             "dimension": intent.get("dimension") or None,
             "filter": intent.get("filter") or None,
         }
+
+        # TASK 4: Store in cache before returning
+        if final_intent["intent"] != "UNKNOWN":
+            llm_cache[cache_key] = final_intent
+            
+        return final_intent
 
     except json.JSONDecodeError as e:
         print(f"[INTENT_PARSER] JSON parse error: {e}")
@@ -276,7 +290,7 @@ def parse_intent(query: str, llm_manager: Optional[LLMManager] = None) -> Intent
             "filter": None,
         }
     except Exception as e:
-        print(f"[INTENT_PARSER] Error: {e}")
+        print(f"[INTENT_PARSER] Failed to parse: {e}")
         return {
             "intent": "UNKNOWN",
             "kpi": None,

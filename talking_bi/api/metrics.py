@@ -25,8 +25,24 @@ async def get_metrics():
         - failure_breakdown
     """
     try:
+        from services.cache import stats
         metrics = evaluator_singleton.compute_metrics()
-        return metrics
+        
+        system_health = "OK" if metrics.get("success_rate", 0) >= 0.9 else "DEGRADED"
+        
+        return {
+            "summary": {
+                "success_rate": metrics.get("success_rate", 0),
+                "avg_latency": metrics.get("avg_latency_ms", 0),
+                "semantic_usage": metrics.get("semantic_usage_rate", 0),
+                "partial_execution": metrics.get("partial_execution_rate", 0)
+            },
+            "system_health": system_health,
+            "cache_stats": {
+                "query_cache_hits": stats.query_cache_hits,
+                "llm_cache_hits": stats.llm_cache_hits
+            }
+        }
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to compute metrics: {str(e)}"

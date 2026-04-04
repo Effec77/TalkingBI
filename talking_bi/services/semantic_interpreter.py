@@ -66,6 +66,7 @@ SEMANTIC_MAP: Dict[str, List[str]] = {
         "total_revenue",
         "net_revenue",
         "gross_revenue",
+        "mrr",
         "sales",
         "amount",
     ],

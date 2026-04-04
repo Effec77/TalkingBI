@@ -137,13 +137,13 @@ class QueryNormalizer:
             # Define exact phrase mappings (not substring)
             PHRASE_MAP = {
                 "sales": "revenue",
-                "revenue numbers": "show revenue",
-                "revenue data": "show revenue",
+                "revenue numbers": "revenue",
+                "revenue data": "revenue",
                 "show churn": "show churn_flag",
                 "churn rate": "churn_flag",
                 "expenses": "amount",
-                "total expenses": "show amount",
-                "total amount": "show amount",  # ADDED for Finance dataset
+                "total expenses": "amount",
+                "total amount": "total_amount",
                 "product category": "product_category",
                 "region wise": "by region",
                 "country wise": "by country",

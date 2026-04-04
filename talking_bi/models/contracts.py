@@ -128,6 +128,21 @@ class ExecutionTrace:
     execution_path: List[str] = field(default_factory=list)
     # Example: ["filter", "groupby", "aggregate", "chart"]
 
+    # Phase 9B: Production Execution
+    backend_used: str = "pandas"
+    cache_hit: bool = False
+    llm_cache_hit: bool = False
+    fallback_triggered: bool = False
+
+    # Fixes
+    kpi_validation: Dict[str, Any] = field(default_factory=dict)
+    cache_used: bool = False
+    cache_reason: str = ""
+    context_applied: bool = False
+    kpi_resolution: Dict[str, Any] = field(default_factory=dict)
+    trend_detected: bool = False
+    trend_dimension: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "normalized_query": self.normalized_query,
@@ -144,6 +159,17 @@ class ExecutionTrace:
             "context_used": self.context_used,
             "context_kpi_inherited": self.context_kpi_inherited,
             "execution_path": self.execution_path,
+            "backend_used": self.backend_used,
+            "cache_hit": self.cache_hit,
+            "llm_cache_hit": self.llm_cache_hit,
+            "fallback_triggered": self.fallback_triggered,
+            "kpi_validation": self.kpi_validation,
+            "cache_used": self.cache_used,
+            "cache_reason": self.cache_reason,
+            "context_applied": self.context_applied,
+            "kpi_resolution": self.kpi_resolution,
+            "trend_detected": self.trend_detected,
+            "trend_dimension": self.trend_dimension,
         }
 
 

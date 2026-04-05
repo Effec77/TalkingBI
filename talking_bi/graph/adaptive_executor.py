@@ -95,6 +95,14 @@ def _apply_filter(df: pd.DataFrame, intent: Dict[str, Any]) -> pd.DataFrame:
     if not filter_val:
         return df.copy()
 
+    # FIX 2 Phase 9C.1: Handle structured NOT_NULL filter
+    if isinstance(filter_val, dict) and filter_val.get("operator") == "NOT_NULL":
+        col = filter_val.get("column")
+        if col in df.columns:
+            filtered = df[df[col].notna()]
+            print(f"[6D:filter] Applied {col} IS NOT NULL → {len(filtered)} rows")
+            return filtered
+            
     # FIX 2: Handle null/none/nan values
     filter_str = str(filter_val).lower().strip()
     is_null_filter = filter_str in ["null", "none", "nan"]

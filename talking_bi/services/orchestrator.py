@@ -27,6 +27,7 @@ from graph.df_registry import register_df, deregister_df
 from services.cache import query_cache, get_query_key, llm_cache
 from services.postgres_backend import PostgresBackend
 from services.execution_backend import PandasBackend
+from services.query_preprocessor import preprocess_query
 
 
 
@@ -87,9 +88,18 @@ class QueryOrchestrator:
 
             # TASK 5: QUERY RESULT CACHE (High Impact)
             from services.query_normalizer import create_normalizer
-            norm_pre = create_normalizer(metadata.columns, [])
+            cols = metadata.columns if hasattr(metadata, "columns") else metadata.get("columns", [])
+            fname = metadata.filename if hasattr(metadata, "filename") else metadata.get("filename", "unknown")
+            
+            norm_pre = create_normalizer(cols, [])
             norm_q, _ = norm_pre.normalize(query)
-            q_key = get_query_key(norm_q, metadata.filename)
+            
+            # Get conversation context for cache key
+            conv_session_cache = self.conv_manager.get_or_create(session_id)
+            context_history_cache = conv_session_cache.run_history if conv_session_cache else []
+            last_intent_cache = context_history_cache[-1].get("intent") if context_history_cache else None
+            
+            q_key = get_query_key(norm_q, fname, context=last_intent_cache)
             
             from services.cache import USE_CACHE
             if USE_CACHE and q_key in query_cache:
@@ -107,6 +117,9 @@ class QueryOrchestrator:
             conv_session = self.conv_manager.get_or_create(session_id)
             context_history = conv_session.run_history if conv_session else []
 
+            # Step 1.5: Fix the dataset_columns access
+            dataset_columns = metadata.columns if hasattr(metadata, 'columns') else metadata.get('columns', [])
+            
             # Step 2: Generate dashboard plan
             plan = generate_dashboard_plan(
                 session_id=session_id,
@@ -114,14 +127,22 @@ class QueryOrchestrator:
                 uploaded_dataset=metadata,
             )
 
-            dataset_columns = metadata.columns
             kpi_candidates = (
                 plan.kpi_candidates if hasattr(plan, "kpi_candidates") else []
             )
 
+            # Step 2.5: Preprocess query (Phase 9C.2)
+            # Runs deterministic normalization before any parsing.
+            # Uses last resolved intent as context for compare/trend completion.
+            last_intent = context_history[-1].get("intent") if context_history else {}
+            preprocessed_query = preprocess_query(query, last_intent)
+            if preprocessed_query != query:
+                print(f"[9C.2:PREPROCESSOR] {repr(query)} -> {repr(preprocessed_query)}")
+            trace.preprocessed_query = preprocessed_query
+
             # Step 3: Normalize (6E)
             normalizer = create_normalizer(dataset_columns, kpi_candidates)
-            normalized_query, norm_metadata = normalizer.normalize(query)
+            normalized_query, norm_metadata = normalizer.normalize(preprocessed_query)
 
             trace.normalized_query = normalized_query
             trace.normalization_applied = normalized_query != query
@@ -130,6 +151,31 @@ class QueryOrchestrator:
             # Step 4: Deterministic override (6G)
             schema_mapper = create_schema_mapper(df, kpi_candidates)
             detector = DeterministicIntentDetector(schema_mapper, context_history)
+
+            # FIX 2: Filter Noun Interpretation (Phase 9C.1)
+            if normalized_query.lower().startswith("filter"):
+                tokens = normalized_query.split()
+                if len(tokens) == 2:
+                    column_term = tokens[1]
+                    # Map to actual column
+                    mapped_col, _ = schema_mapper.map_dimension(column_term)
+                    if mapped_col:
+                        print(f"[ORCHESTRATOR] 🔍 Filter noun detected: {mapped_col}")
+                        intent = {
+                            "intent": "SUMMARIZE",
+                            "kpi": None,
+                            "dimension": None,
+                            "filter": {
+                                "column": mapped_col,
+                                "operator": "NOT_NULL"
+                            }
+                        }
+                        trace.filter_interpretation = "NOT_NULL"
+                        trace.g6_applied = True
+                        trace.g6_reason = "filter_noun"
+                        # Execute early
+                        deterministic_intent = intent
+
             # Rule 4: Trend detection
             deterministic_intent = detector.detect(normalized_query)
             # Rule 1/2/3/4/6: Robust Trend Detection
@@ -152,16 +198,19 @@ class QueryOrchestrator:
                             break
                 
                 if detected_date_col:
-                    print(f"[ORCHESTRATOR] 📈 Trend detected, using dimension: {detected_date_col}")
+                    print(f"[ORCHESTRATOR] Trend detected, using dimension: {detected_date_col}")
                     trace.trend_detected = True
                     trace.trend_dimension = detected_date_col
+                    trace.trend_locked = True
                     
-                    # Rule 2: Force Intent
+                    # Rule 2: Force Intent & LOCK (Phase 9C.1)
                     trend_intent = {
                         "intent": "SEGMENT_BY",
                         "dimension": detected_date_col,
                         "kpi": None,
-                        "filter": None
+                        "filter": None,
+                        "_locked": True,
+                        "_lock_source": "trend"
                     }
                     
                     # Ensure deterministic_intent reflects this
@@ -171,7 +220,7 @@ class QueryOrchestrator:
                         deterministic_intent = trend_intent
                 else:
                     # Rule 4: Fail Safe
-                    print("[ORCHESTRATOR] ⚠️ Trend requested but no date column found")
+                    print("[ORCHESTRATOR] Trend requested but no date column found")
                     return OrchestratorResult(
                         status="INCOMPLETE",
                         query=query,
@@ -210,7 +259,9 @@ class QueryOrchestrator:
 
             # Step 6: Semantic interpret (7)
             semantic_interpreter = create_semantic_interpreter(df, schema_mapper)
-            intent = semantic_interpreter.interpret(normalized_query, intent)
+            print(f"[TRACE:ORCHESTRATOR] BEFORE SEMANTIC: {intent}")
+            intent = semantic_interpreter.interpret(preprocessed_query, intent)
+            print(f"[TRACE:ORCHESTRATOR] AFTER SEMANTIC: {intent}")
 
             if intent.get("semantic_meta", {}).get("applied"):
                 trace.semantic_applied = True
@@ -218,8 +269,51 @@ class QueryOrchestrator:
                 trace.semantic_mapping = meta.get("mapped_to")
                 trace.semantic_confidence = meta.get("confidence", 0.0)
 
+                        # Task 8: Confidence Scoring (Phase 9C)
+                        # Task 8: Confidence Scoring (Phase 9C)
+            kpi_term = intent.get("kpi")
+            dim_term = intent.get("dimension")
+            
+            kpi_conf = 1.0 if kpi_term in df.columns else 0.5 if kpi_term else 0.0
+            sem_conf = trace.semantic_confidence or 0.0
+            ctx_conf = 1.0 if trace.context_used else 0.0
+            
+            # For COMPARE intents, if kpi_1 or kpi_2 is present, we have some confidence
+            if intent.get("intent") == "COMPARE":
+                if intent.get("kpi_1") or intent.get("kpi_2") or intent.get("filter"):
+                    kpi_conf = max(kpi_conf, 0.5)
+            
+            overall_conf = max(kpi_conf, sem_conf, ctx_conf)
+            if not kpi_term and not dim_term and intent.get("intent") != "COMPARE":
+                overall_conf = 0.0
+                
+            trace.confidence = {
+                "kpi": kpi_conf,
+                "semantic": sem_conf,
+                "context": ctx_conf,
+                "overall": overall_conf
+            }
+            
+            # Rule 8: If overall confidence is low, mark as INCOMPLETE/UNKNOWN
+            # Phase 9C.1 Bypass for locked or special intents.
+            # Bypass COMPARE as it resolves its confidence in Phase 6C later.
+            if overall_conf < 0.5 and intent.get("intent") not in ["UNKNOWN", "COMPARE"] and not intent.get("_locked") and not trace.filter_interpretation:
+                print(f"[ORCHESTRATOR] Low confidence query ({overall_conf}), marking INCOMPLETE")
+                trace.failure_reason = {
+                    "type": "SEMANTIC_FAIL",
+                    "stage": "7",
+                    "details": "Low confidence in intent resolution"
+                }
+                return self._unresolved_result(
+                    query, session_id, intent, 
+                    type('Res', (object,), {"status": "INCOMPLETE", "intent": intent, "warnings": [type('Warn', (object,), {"type": "confidence", "message": "Low confidence query"})], "context_used": False, "context_applied": False})(),
+                    trace, start_time
+                )
+
             # Step 7: Schema map (6F)
+            print(f"[TRACE:ORCHESTRATOR] BEFORE SCHEMA: {intent}")
             intent = schema_mapper.map_intent(intent)
+            print(f"[TRACE:ORCHESTRATOR] AFTER SCHEMA: {intent}")
             
             # FIX 1: KPI Validation debug trace
             trace.kpi_validation = {
@@ -230,8 +324,38 @@ class QueryOrchestrator:
 
             if intent.get("mapping_meta"):
                 meta = intent["mapping_meta"]
+                
+                # Check for explicit ambiguity from Schema Mapper
+                ambiguous_candidates = meta.get("ambiguous_candidates", {})
+                if ambiguous_candidates:
+                    latency_ms = (time.time() - start_time) * 1000
+                    all_candidates = []
+                    for k, v in ambiguous_candidates.items():
+                        if isinstance(v, list): all_candidates.extend(v)
+                    all_candidates = list(set(all_candidates)) # deduplicate
+                    
+                    return OrchestratorResult(
+                        status="AMBIGUOUS",
+                        query=query,
+                        session_id=session_id,
+                        intent=intent,
+                        semantic_meta=intent.get("semantic_meta", {}),
+                        data=[],
+                        charts=[],
+                        insights=[],
+                        candidates=all_candidates,
+                        plan={},
+                        latency_ms=latency_ms,
+                        warnings=[f"Ambiguous mapping detected for one or more fields. Candidates: {all_candidates}"],
+                        errors=[],
+                        trace=trace.to_dict(),
+                    )
+                    
+                # 9C.2: If 6G explicitly tagged kpi_source (e.g. "context"),
+                # preserve it — don't let schema mapper overwrite provenance.
+                kpi_source_override = trace.raw_intent.get("kpi_source") if hasattr(trace, "raw_intent") and isinstance(trace.raw_intent, dict) else None
                 trace.mapped_fields = {
-                    "kpi": meta.get("kpi_source", ""),
+                    "kpi": kpi_source_override or meta.get("kpi_source", ""),
                     "dimension": meta.get("dimension_source", ""),
                 }
 
@@ -309,11 +433,13 @@ class QueryOrchestrator:
                         resolver.add_to_context(run["intent"])
 
             dashboard_plan_dict = {"kpis": [k.get("name", "") for k in kpi_candidates]}
-            resolution_result = resolver.resolve(intent, dashboard_plan_dict)
+            print(f"[TRACE:ORCHESTRATOR] BEFORE RESOLVER: {intent}")
+            resolution_result = resolver.resolve(intent, dashboard_plan_dict, current_columns=list(df.columns))
+            print(f"[TRACE:ORCHESTRATOR] AFTER RESOLVER: {resolution_result.intent if resolution_result else 'None'}")
 
             trace.context_used = resolution_result.context_used
             trace.context_applied = getattr(resolution_result, "context_applied", False)
-            if resolution_result.context_used and resolution_result.intent:
+            if resolution_result.context_used and resolution_result.intent and hasattr(resolution_result.intent, "get"):
                 trace.context_kpi_inherited = resolution_result.intent.get("kpi")
 
             # Handle non-resolved statuses
@@ -415,24 +541,35 @@ class QueryOrchestrator:
                     },
                 }
                 # Execute using correct backend abstraction
+                # Task 6: Backend Consistency (Phase 9C)
+                DEBUG_BACKEND_CHECK = False
                 USE_POSTGRES = False
-                if USE_POSTGRES and upload_session.get("use_postgres"):
-                    backend = PostgresBackend()
-                    adaptive_res_pg = backend.execute(
-                        plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
-                        df=df, prev_state=prev_state, session_id=session_id
-                    )
-                    backend_pd = PandasBackend()
-                    adaptive_res_pd = backend_pd.execute(
-                        plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
-                        df=df, prev_state=prev_state, session_id=session_id
-                    )
-                    # Check consistency
-                    if str(adaptive_res_pg.final_output) == str(adaptive_res_pd.final_output):
-                        adaptive_res = adaptive_res_pg
-                    else:
-                        adaptive_res = adaptive_res_pd
-                        trace.fallback_triggered = True
+                
+                if (USE_POSTGRES or DEBUG_BACKEND_CHECK) and upload_session.get("use_postgres"):
+                     backend_pd = PandasBackend()
+                     res_pd = backend_pd.execute(
+                         plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
+                         df=df, prev_state=prev_state, session_id=session_id
+                     )
+                     
+                     backend_pg = PostgresBackend()
+                     res_pg = backend_pg.execute(
+                         plan=exec_plan, intent=intent, dashboard_plan=dashboard_plan_dict,
+                         df=df, prev_state=prev_state, session_id=session_id
+                     )
+                     
+                     # Simple check
+                     pd_out = str(res_pd.final_output)
+                     pg_out = str(res_pg.final_output)
+                     
+                     if pd_out == pg_out or not DEBUG_BACKEND_CHECK:
+                         adaptive_res = res_pg if USE_POSTGRES else res_pd
+                         backend = backend_pg if USE_POSTGRES else backend_pd
+                     else:
+                         print("[ORCHESTRATOR] ⚠ Backend inconsistency detected, falling back to Pandas")
+                         adaptive_res = res_pd
+                         backend = backend_pd
+                         trace.fallback_triggered = True
                 else:
                     backend = PandasBackend()
                     adaptive_res = backend.execute(
@@ -602,6 +739,15 @@ class QueryOrchestrator:
         start_time: float,
     ) -> OrchestratorResult:
         """Build unresolved result (UNKNOWN, AMBIGUOUS, INCOMPLETE)."""
+        # Update conversation context for multi-turn support
+        result_state = {
+            "intent": intent,
+            "run_id": str(uuid4()),
+            "status": resolution_result.status,
+            "warnings": [f"{w.type}: {w.message}" for w in resolution_result.warnings],
+        }
+        self.conv_manager.update_session(session_id, result_state, query)
+        
         latency_ms = (time.time() - start_time) * 1000
 
         return OrchestratorResult(

@@ -1,438 +1,244 @@
 """
-Phase 6F: Schema Intelligence Layer
+Phase 6F: Schema Intelligence Layer (DIL-Aware)
 
-Bridges user language with dataset schema WITHOUT semantic guessing.
-Deterministic mapping only.
+Bridges user language with dataset schema using deterministic,
+score-based multi-signal evaluation (Rapidfuzz + Dataset Intelligence profile).
 
-Resolution order:
-1. Exact match
-2. Normalized match
-3. Schema map lookup
-4. Fuzzy match (difflib, cutoff=0.8)
-5. Else → None
+Resolution order: Score-based ranking.
 """
 
 import re
-import difflib
 from typing import Dict, List, Optional, Any, Tuple
+from rapidfuzz import fuzz
+from services.dataset_intelligence import DatasetIntelligence
 
 
 class SchemaMapper:
-    """
-    Maps user terminology to actual dataset schema elements.
-
-    Responsibility:
-    - Normalize user terms to match schema
-    - Handle synonyms via static + auto-generated maps
-    - Detect binary columns as valid KPIs
-    - Provide transparent mapping metadata
-
-    Rules:
-    - NO LLM usage
-    - NO semantic inference
-    - Deterministic only
-    """
-
-    # Static synonym mappings (user term → canonical schema term)
-    STATIC_SCHEMA_MAP = {
-        # Revenue synonyms
-        "revenue": [
-            "sales",
-            "amount",
-            "total_amount",
-            "total_revenue",
-            "income",
-            "turnover",
-            "earnings",
-            "mrr",
-        ],
-        # Quantity synonyms
-        "quantity": ["units", "volume", "count", "qty"],
-        # Amount/Expense synonyms
-        "amount": ["expenses", "cost", "spend", "spending", "total_amount"],
-        # Churn synonyms
-        "churn_flag": ["churn", "churned", "attrition", "cancelled", "canceled"],
-        # Discount synonyms
-        "discount": ["discounts", "savings", "deductions"],
-        # Region synonyms
-        "region": ["area", "territory", "zone", "location"],
-        # Category synonyms (handles both "product_category" and "category")
-        "product_category": [
-            "category",
-            "product_category",
-            "product category",
-            "type",
-            "group",
-        ],
-        # Standalone category for finance dataset
-        "category": [
-            "category",
-            "type",
-            "group",
-            "class",
-        ],
-        # Country synonyms
-        "country": ["nation", "territory", "market"],
-        # Plan synonyms (for SaaS)
-        "subscription_plan": ["plan", "tier", "package", "subscription"],
-    }
-
     def __init__(self, df, kpi_candidates: List[Dict]):
         """
-        Initialize SchemaMapper with dataset.
-
-        Args:
-            df: DataFrame with dataset
-            kpi_candidates: List of KPI candidate dicts from 0B
+        Initialize SchemaMapper with dataframe.
+        Leverages DatasetIntelligence directly to dynamically build profiles.
         """
         self.df = df
         self.kpi_candidates = kpi_candidates
-
-        # Extract column names
+        # Extract columns
         self.columns = list(df.columns)
-
-        # Detect binary columns
-        self.binary_columns = self.detect_binary_kpis(df)
-
-        # Build comprehensive schema map
-        self.schema_map = self.build_schema_map(df, kpi_candidates)
-
-        # Build reverse lookup for KPIs
-        self.kpi_names = [k.get("name", "").lower() for k in kpi_candidates]
-
-        # Add binary columns as valid KPIs
-        for col in self.binary_columns:
-            if col.lower() not in self.kpi_names:
-                self.kpi_names.append(col.lower())
-
-    def normalize(self, text: str) -> str:
-        """
-        Normalize text for matching.
-
-        Rules:
-        - lowercase
-        - replace spaces with underscores
-        - remove special characters
-        """
-        if not text:
-            return ""
-        text = text.lower().strip()
-        text = text.replace(" ", "_")
-        text = text.replace("-", "_")
-        text = re.sub(r"[^a-z0-9_]", "", text)
-        return text
-
-    def detect_binary_kpis(self, df) -> List[str]:
-        """
-        Identify binary columns (nunique == 2).
-
-        Binary columns like churn_flag are valid KPIs.
-        Returns list of binary column names.
-        """
-        binary_cols = []
-
-        for col in df.columns:
-            try:
-                # Skip non-numeric columns for binary detection
-                if df[col].dtype not in ["int64", "float64", "bool"]:
-                    continue
-
-                # Get unique non-null values
-                unique_vals = df[col].dropna().unique()
-
-                # Check if binary (2 unique values)
-                if len(unique_vals) == 2:
-                    # Check if values are 0/1 or True/False
-                    vals = set(unique_vals)
-                    if vals.issubset({0, 1, 0.0, 1.0, True, False}):
-                        binary_cols.append(col)
-
-            except Exception:
-                continue
-
-        return binary_cols
-
-    def build_schema_map(self, df, kpi_candidates: List[Dict]) -> Dict[str, List[str]]:
-        """
-        Build comprehensive schema mapping.
-
-        Combines:
-        1. Static mappings (synonyms)
-        2. Auto-generated from column names
-        3. KPI candidate names
-        """
-        schema_map = {}
-
-        # Start with static map
-        for canonical, aliases in self.STATIC_SCHEMA_MAP.items():
-            schema_map[canonical] = aliases.copy()
-
-        # Add column name variations
-        for col in self.columns:
-            normalized = self.normalize(col)
-
-            # Map normalized form to original
-            if normalized not in schema_map:
-                schema_map[normalized] = []
-            if col not in schema_map[normalized]:
-                schema_map[normalized].append(col)
-
-            # Add space-separated variations
-            space_form = col.replace("_", " ")
-            if space_form != col and space_form not in schema_map.get(normalized, []):
-                if normalized not in schema_map:
-                    schema_map[normalized] = []
-                schema_map[normalized].append(space_form)
-
-        # Add KPI candidate aliases
-        for kpi in kpi_candidates:
-            name = kpi.get("name", "")
-            source = kpi.get("source_column", "")
-
-            if name:
-                normalized_name = self.normalize(name)
-                if normalized_name not in schema_map:
-                    schema_map[normalized_name] = []
-
-                # Add source column as alias
-                if source and source != name:
-                    if source not in schema_map[normalized_name]:
-                        schema_map[normalized_name].append(source)
-
-                # Add normalized source
-                if source:
-                    norm_source = self.normalize(source)
-                    if norm_source not in schema_map[normalized_name]:
-                        schema_map[normalized_name].append(norm_source)
-
-        # Add binary columns with rate suffixes
-        for col in self.binary_columns:
-            normalized = self.normalize(col)
-
-            # Map churn_flag → churn_rate
-            if normalized not in schema_map:
-                schema_map[normalized] = []
-
-            # Add without _flag suffix
-            if "_flag" in normalized:
-                base = normalized.replace("_flag", "")
-                if base not in schema_map[normalized]:
-                    schema_map[normalized].append(base)
-                if f"{base}_rate" not in schema_map[normalized]:
-                    schema_map[normalized].append(f"{base}_rate")
-
-        return schema_map
-
-    def fuzzy_match(self, term: str, candidates: List[str]) -> Optional[str]:
-        """
-        Use difflib for fuzzy string matching.
-
-        Args:
-            term: User's term
-            candidates: List of valid schema terms
-
-        Returns:
-            Best match or None (cutoff=0.8)
-        """
-        if not term or not candidates:
-            return None
-
-        matches = difflib.get_close_matches(
-            term.lower(), [c.lower() for c in candidates], n=1, cutoff=0.8
-        )
-
-        if matches:
-            # Find original case version
-            match_lower = matches[0]
-            for candidate in candidates:
-                if candidate.lower() == match_lower:
-                    return candidate
-            return match_lower
-
-        return None
-
-    def map_kpi(self, user_term: str) -> Tuple[Optional[str], str]:
-        """
-        Map user KPI term to schema KPI.
         
-        Resolution order:
-        1. Exact match (case-insensitive)
-        2. Normalized match
-        3. Schema map lookup
-        4. Target column contains check (fuzzy fallback)
-        5. Else -> None
-        """
+        # Build comprehensive semantic profile dynamically
+        # Enables us to rely on role_scores and semantic_types
+        self.profile = DatasetIntelligence(df).build()
+        
+    def _compute_score(self, query_term: str, col_name: str, mode: str) -> float:
+        # FIX 2: Normalize Column Name (LIGHTWEIGHT)
+        def normalize_col(name):
+            return re.sub(r'[^a-zA-Z0-9 ]', ' ', str(name)).lower().strip()
+            
+        query_normalized = normalize_col(query_term)
+        col_normalized = normalize_col(col_name)
+
+        # A. Name Similarity
+        # Basic fuzzy ratio
+        similarity = fuzz.ratio(query_normalized, col_normalized) / 100.0
+        
+        # Hard exact match override
+        if query_normalized == col_normalized or query_normalized == col_normalized.replace(' ', ''):
+            similarity = 1.0
+        
+        # B. Semantic Match
+        semantic_type = self.profile[col_name].get("semantic_type", "unknown")
+        role_scores = self.profile[col_name].get("role_scores", {})
+        
+        semantic_match = 0.0
+        role_score = 0.0
+        
+        if mode == "kpi":
+            if semantic_type == "kpi":
+                semantic_match = 1.0
+            role_score = role_scores.get("is_kpi", 0.0)
+            
+        elif mode == "dimension":
+            if semantic_type in ["dimension", "date"]:
+                semantic_match = 1.0
+            role_score = role_scores.get("is_dimension", 0.0)
+            
+            # Identifier penalty
+            if semantic_type == "identifier":
+                role_score -= 0.5  # Penalize choosing ID as group-by
+            
+        score = (similarity * 0.4) + (semantic_match * 0.3) + (role_score * 0.3)
+        return score
+
+    def map_kpi(self, user_term: str) -> Tuple[Any, str]:
         if not user_term:
             return None, "no_term"
-
-        user_lower = user_term.lower().strip()
-        user_normalized = self.normalize(user_term)
+            
+        scores = {}
+        for col in self.columns:
+            scores[col] = self._compute_score(user_term, col, mode="kpi")
+            
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        top_col, top_score = ranked[0]
         
-        # Rule 1: STRICT - if it exists in columns, ALWAYS resolve
-        col_lower_map = {c.lower(): c for c in self.columns}
-        if user_lower in col_lower_map:
-            return col_lower_map[user_lower], "exact_column_match"
-
-        # 1. Exact match against KPI candidates
-        for kpi in self.kpi_candidates:
-            name = kpi.get("name", "")
-            if name.lower() == user_lower:
-                return name, "exact_match"
-
-        # 2. Normalized match KPI candidates
-        for kpi in self.kpi_candidates:
-            name = kpi.get("name", "")
-            if self.normalize(name) == user_normalized:
-                return name, "normalized_match"
-
-        # 3. Schema map lookup
-        normalized_columns = {self.normalize(c): c for c in self.columns}
-        for canonical, aliases in self.schema_map.items():
-            if user_lower == canonical.lower() or user_lower in [a.lower() for a in aliases]:
-                for kpi in self.kpi_candidates:
-                    kpi_name = kpi.get("name", "").lower()
-                    kpi_source = kpi.get("source_column", "").lower()
-                    if kpi_name == canonical.lower() or kpi_source == canonical.lower():
-                        return kpi.get("name"), "schema_map"
-                    for alias in aliases:
-                        if kpi_name == alias.lower() or kpi_source == alias.lower():
-                            return kpi.get("name"), "schema_map"
+        print(f"[6F] KPI Resolve '{user_term}' -> Scores: {[(c, round(s, 2)) for c, s in ranked[:3]]}")
+        
+        if len(ranked) > 1:
+            diff = ranked[0][1] - ranked[1][1]
+            # FIX 3: Confidence-Based Soft Resolution
+            # If top score is very high, trust it even with close neighbors
+            if top_score > 0.85:
+                return top_col, "resolved"
                 
-                # Check columns directly
-                for col_norm, col_raw in normalized_columns.items():
-                    if col_norm == canonical.lower() or col_norm in [a.lower() for a in aliases]:
-                        return col_raw, "schema_map_column_fallback"
-                        
-                return canonical, "schema_map_default"
+            if diff < 0.1 and top_score > 0.4:
+                # FIX 1: Tie-breaker Logic
+                # Prefer candidate with higher is_kpi role score or cleaner name
+                c1, s1 = ranked[0]
+                c2, s2 = ranked[1]
+                
+                role1 = self.profile[c1].get("role_scores", {}).get("is_kpi", 0.0)
+                role2 = self.profile[c2].get("role_scores", {}).get("is_kpi", 0.0)
+                
+                if role1 > role2 + 0.1:
+                    return c1, "resolved"
+                
+                # Check for "cleaner" name (less symbols/numbers)
+                clean1 = len(re.sub(r'[^a-zA-Z]', '', c1)) / len(c1) if len(c1) > 0 else 0
+                clean2 = len(re.sub(r'[^a-zA-Z]', '', c2)) / len(c2) if len(c2) > 0 else 0
+                
+                if clean1 > clean2 + 0.2:
+                    return c1, "resolved"
 
-        # 4. Fallback Rule 1: fuzzy contain match
-        matches = []
-        for col in self.columns:
-            if user_lower in col.lower():
-                matches.append(col)
+                print(f"[6F] AMBIGUOUS KPI: '{user_term}' between {c1} and {c2}")
+                return [r[0] for r in ranked[:3]], "ambiguous"
         
-        if len(matches) == 1:
-            return matches[0], "fuzzy_contain_match"
-        elif len(matches) > 1:
-            return None, "ambiguous"
+        if top_score < 0.4:
+            return None, "unmapped"
+            
+        return top_col, "resolved"
 
-        return None, "no_match"
-
-    def map_dimension(self, user_term: str) -> Tuple[Optional[str], str]:
-        """
-        Map user dimension term to schema column.
-
-        Same logic as map_kpi but against all columns.
-        """
+    def map_dimension(self, user_term: str) -> Tuple[Any, str]:
         if not user_term:
             return None, "no_term"
-
-        user_lower = user_term.lower()
-        user_normalized = self.normalize(user_term)
-
-        # 1. Exact match
+            
+        scores = {}
         for col in self.columns:
-            if col.lower() == user_lower:
-                return col, "exact_match"
+            scores[col] = self._compute_score(user_term, col, mode="dimension")
+            
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        top_col, top_score = ranked[0]
+        
+        print(f"[6F] DIM Resolve '{user_term}' -> Scores: {[(c, round(s, 2)) for c, s in ranked[:3]]}")
+        
+        # Block invalid groupings explicitly
+        if self.profile[top_col].get("semantic_type") == "identifier":
+            print(f"[6F] INVALID_GROUPBY detected: '{user_term}' maps to identifier '{top_col}'")
+            return None, "invalid_groupby"
 
-        # 2. Normalized match
-        for col in self.columns:
-            if self.normalize(col) == user_normalized:
-                return col, "normalized_match"
+        # Ambiguity detection
+        if len(ranked) > 1:
+            diff = ranked[0][1] - ranked[1][1]
+            # FIX 3: Soft Resolution
+            if top_score > 0.85:
+                return top_col, "resolved"
 
-        # 3. Schema map lookup (reverse)
-        for canonical, aliases in self.schema_map.items():
-            if user_lower == canonical.lower():
-                # Find actual column
-                for col in self.columns:
-                    if col.lower() == canonical.lower():
-                        return col, "schema_map"
-            for alias in aliases:
-                if user_lower == alias.lower():
-                    for col in self.columns:
-                        if self.normalize(col) == canonical:
-                            return col, "schema_map"
+            if diff < 0.1 and top_score > 0.4:
+                # FIX 1: Tie-breaker (Dimension)
+                c1, s1 = ranked[0]
+                c2, s2 = ranked[1]
+                
+                role1 = self.profile[c1].get("role_scores", {}).get("is_dimension", 0.0)
+                role2 = self.profile[c2].get("role_scores", {}).get("is_dimension", 0.0)
+                
+                if role1 > role2 + 0.1:
+                    return c1, "resolved"
 
-        # 4. Fuzzy match (REJECTED - low confidence)
-        # Disabled to prevent over-permissive mapping
-        fuzzy_result = self.fuzzy_match(user_term, self.columns)
-        if fuzzy_result:
-            print(
-                f"[6F] Mapping REJECTED: '{user_term}' -> '{fuzzy_result}' (fuzzy_match - low confidence)"
-            )
-
-        # 5. No match
-        return None, "no_match"
+                print(f"[6F] AMBIGUOUS DIMENSION: '{user_term}' between {c1} and {c2}")
+                return [r[0] for r in ranked[:3]], "ambiguous"
+                
+        if top_score < 0.4:
+            return None, "unmapped"
+            
+        return top_col, "resolved"
 
     def map_intent(self, intent_dict: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Map all schema-relevant fields in intent.
+        print(f"[TRACE:SCHEMA] Input: {intent_dict}")
+        if intent_dict.get("_locked"):
+            print(f"[TRACE:SCHEMA] LOCK ACTIVE: {intent_dict.get('_lock_source')}")
+            return intent_dict.copy()
 
-        Input:
-            {"kpi": "...", "dimension": "...", "filter": "..."}
-
-        Output:
-            {
-                "kpi": mapped_value,
-                "dimension": mapped_value,
-                "filter": mapped_value,
-                "mapping_meta": {
-                    "kpi_source": "...",
-                    "dimension_source": "...",
-                    "confidence": "high/medium/low"
-                }
-            }
-        """
         result = intent_dict.copy()
         mapping_meta = {
             "kpi_source": None,
             "dimension_source": None,
             "filter_source": None,
-            "confidence": "high",
+            "confidence": 1.0,
+            "ambiguous_candidates": {}
         }
 
         # Map KPI
         if intent_dict.get("kpi"):
-            mapped_kpi, source = self.map_kpi(intent_dict["kpi"])
-            if mapped_kpi:
+            mapped_kpi, status = self.map_kpi(intent_dict["kpi"])
+            if status == "ambiguous":
+                result["kpi"] = None
+                mapping_meta["kpi_source"] = status
+                mapping_meta["confidence"] = 0.0
+                mapping_meta["ambiguous_candidates"]["kpi"] = mapped_kpi # it's the list
+            elif mapped_kpi:
                 result["kpi"] = mapped_kpi
-                mapping_meta["kpi_source"] = source
-                print(
-                    f"[6F] Mapping: '{intent_dict['kpi']}' -> '{mapped_kpi}' ({source})"
-                )
+                mapping_meta["kpi_source"] = status
             else:
-                mapping_meta["kpi_source"] = "unmapped"
-                mapping_meta["confidence"] = "low"
+                result["kpi"] = None
+                mapping_meta["kpi_source"] = status
+                mapping_meta["confidence"] = 0.3
+
+        # Map kpi_1 (for COMPARE intent)
+        if intent_dict.get("kpi_1"):
+            mapped_kpi_1, status = self.map_kpi(intent_dict["kpi_1"])
+            if status == "ambiguous":
+                result["kpi_1"] = None
+                mapping_meta["confidence"] = 0.0
+                mapping_meta["ambiguous_candidates"]["kpi_1"] = mapped_kpi_1
+            elif mapped_kpi_1:
+                result["kpi_1"] = mapped_kpi_1
+            else:
+                result["kpi_1"] = None
+
+        # Map kpi_2 (for COMPARE intent)
+        if intent_dict.get("kpi_2"):
+            mapped_kpi_2, status = self.map_kpi(intent_dict["kpi_2"])
+            if status == "ambiguous":
+                result["kpi_2"] = None
+                mapping_meta["confidence"] = 0.0
+                mapping_meta["ambiguous_candidates"]["kpi_2"] = mapped_kpi_2
+            elif mapped_kpi_2:
+                result["kpi_2"] = mapped_kpi_2
+            else:
+                result["kpi_2"] = None
 
         # Map dimension
         if intent_dict.get("dimension"):
-            mapped_dim, source = self.map_dimension(intent_dict["dimension"])
-            if mapped_dim:
+            mapped_dim, status = self.map_dimension(intent_dict["dimension"])
+            if status == "ambiguous":
+                result["dimension"] = None
+                mapping_meta["dimension_source"] = status
+                mapping_meta["confidence"] = 0.0
+                mapping_meta["ambiguous_candidates"]["dimension"] = mapped_dim
+            elif mapped_dim:
                 result["dimension"] = mapped_dim
-                mapping_meta["dimension_source"] = source
-                print(
-                    f"[6F] Mapping: '{intent_dict['dimension']}' -> '{mapped_dim}' ({source})"
-                )
+                mapping_meta["dimension_source"] = status
             else:
-                mapping_meta["dimension_source"] = "unmapped"
-                mapping_meta["confidence"] = "low"
+                result["dimension"] = None
+                mapping_meta["dimension_source"] = status
+                if status == "invalid_groupby":
+                    mapping_meta["confidence"] = 0.0
+                elif status == "unmapped":
+                    mapping_meta["confidence"] = min(mapping_meta["confidence"], 0.3)
 
-        # Map filter (treat as dimension value)
+        # Filters pass through as values
         if intent_dict.get("filter"):
-            # Filters are values, not column names - keep as-is
             mapping_meta["filter_source"] = "user_value"
-
-        # Determine overall confidence
-        sources = [mapping_meta["kpi_source"], mapping_meta["dimension_source"]]
-        if any(s in ["fuzzy_match", "no_match", "unmapped"] for s in sources if s):
-            mapping_meta["confidence"] = "medium"
-        if all(s in ["exact_match", "normalized_match"] for s in sources if s):
-            mapping_meta["confidence"] = "high"
 
         result["mapping_meta"] = mapping_meta
         return result
 
-
 def create_schema_mapper(df, kpi_candidates: List[Dict]) -> SchemaMapper:
-    """Factory function for SchemaMapper."""
     return SchemaMapper(df, kpi_candidates)

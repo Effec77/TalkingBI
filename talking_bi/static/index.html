@@ -139,8 +139,31 @@
             line-height: 1.5;
             color: #333;
         }
-        
-        /* Input Area */
+
+        /* Trace Panel */
+        .trace-panel {
+            background: #ffffff;
+            border-top: 1px solid #e0e0e0;
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+        }
+
+        .trace-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: #1a1a2e;
+        }
+
+        .trace-block {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
+            font-size: 0.75rem;
+            color: #ccc;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
         .input-area {
             background: white;
             border-top: 1px solid #e0e0e0;
@@ -323,6 +346,16 @@
                         Insights will appear here after you ask a question.
                     </p>
                 </div>
+
+                <!-- Trace Panel (CRITICAL) -->
+                <div class="trace-panel">
+                    <h3 class="trace-title">🔍 Execution Trace</h3>
+                    <div id="traceArea">
+                        <p style="color: #999; font-size: 0.875rem;">
+                            Trace data will appear here.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -369,9 +402,25 @@
         const sessionIdDisplay = document.getElementById('sessionId');
         const chartsArea = document.getElementById('chartsArea');
         const insightsArea = document.getElementById('insightsArea');
+        const traceArea = document.getElementById('traceArea');
         const statusDot = document.getElementById('statusDot');
         const statusText = document.getElementById('statusText');
         const latencyDisplay = document.getElementById('latencyDisplay');
+
+        // File Selection Feedback
+        fileInput.addEventListener('change', (e) => {
+            const fileName = e.target.files[0]?.name;
+            const label = document.querySelector('.file-label');
+            if (fileName) {
+                label.innerHTML = `<strong>Selected: ${fileName}</strong><br><small>Ready to upload</small>`;
+                label.style.borderColor = '#4caf50';
+                label.style.background = '#e8f5e9';
+            } else {
+                label.innerHTML = `Click to select CSV file<br><small>or drag and drop here</small>`;
+                label.style.borderColor = '#ccc';
+                label.style.background = 'transparent';
+            }
+        });
 
         // Upload Dataset
         uploadBtn.addEventListener('click', async () => {
@@ -394,11 +443,23 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Upload failed');
+                    let errText = 'Upload failed';
+                    try {
+                        const errObj = await response.json();
+                        errText = errObj.detail || JSON.stringify(errObj);
+                    } catch (e) {
+                        errText = await response.text() || response.statusText;
+                    }
+                    throw new Error(`[${response.status}] ${errText}`);
                 }
 
                 const data = await response.json();
-                sessionId = data.session_id;
+                sessionId = data.dataset_id || data.session_id;
+                
+                if (!sessionId) {
+                    throw new Error("No session ID returned from server.");
+                }
+                
                 sessionIdDisplay.textContent = `Session: ${sessionId.slice(0, 8)}...`;
 
                 // Show main app
@@ -406,6 +467,7 @@
                 mainApp.classList.remove('hidden');
 
             } catch (error) {
+                console.error("Upload error trace:", error);
                 alert('Upload failed: ' + error.message);
                 uploadBtn.textContent = 'Upload Dataset';
                 uploadBtn.disabled = false;
@@ -479,21 +541,87 @@
             // Clear previous results
             chartsArea.innerHTML = '';
             insightsArea.innerHTML = '';
+            traceArea.innerHTML = '';
+
+            // Render Trace (Always update trace regardless of status to help debugging)
+            if (result.trace) {
+                const traceMap = result.trace.mapped_fields || {};
+                const kpiSource = traceMap.kpi || 'Unknown';
+                
+                const traceObj = {
+                    intent: result.intent?.intent || 'UNKNOWN',
+                    kpi: result.intent?.kpi || null,
+                    dimension: result.intent?.dimension || null,
+                    filters: result.intent?.filter || null,
+                    kpi_source: kpiSource,
+                    execution_plan: result.plan?.operations || result.trace?.execution_path || [],
+                    backend: result.trace?.backend_used || 'N/A'
+                };
+                
+                traceArea.innerHTML = `
+                    <div class="trace-block">${JSON.stringify(traceObj, null, 2)}</div>
+                `;
+            } else {
+                traceArea.innerHTML = '<p style="color: #999;">No trace available.</p>';
+            }
 
             // Show status if not resolved
             if (result.status !== 'RESOLVED') {
+                const statusColor = result.status === 'AMBIGUOUS' ? '#e3f2fd' : '#fff3e0';
+                const borderColor = result.status === 'AMBIGUOUS' ? '#bbdefb' : '#ffe0b2';
+                
                 chartsArea.innerHTML = `
-                    <div style="padding: 2rem; background: #fff3e0; border-radius: 8px;">
-                        <h3>Status: ${result.status}</h3>
-                        <p>${result.errors?.[0] || 'Query could not be resolved'}</p>
-                        ${result.warnings?.length ? `
-                            <ul style="margin-top: 1rem;">
-                                ${result.warnings.map(w => `<li>${w}</li>`).join('')}
-                            </ul>
-                        ` : ''}
+                    <div style="padding: 2rem; background: ${statusColor}; border: 1px solid ${borderColor}; border-radius: 12px; margin-bottom: 2rem;">
+                        <h3 style="margin-bottom: 0.5rem; color: #333;">${result.status}</h3>
+                        <p style="color: #666;">${result.errors?.[0] || result.warnings?.[0] || 'I need more information to complete this query.'}</p>
                     </div>
                 `;
-                return;
+                
+                // Case 1: INCOMPLETE (Suggestions)
+                if (result.status === 'INCOMPLETE' && result.suggestions && result.suggestions.length > 0) {
+                    const panel = document.createElement('div');
+                    panel.className = 'clarification-panel';
+                    panel.innerHTML = `
+                        <div class="clarification-title">💡 Suggested queries</div>
+                        <div class="suggestion-group"></div>
+                    `;
+                    const group = panel.querySelector('.suggestion-group');
+                    result.suggestions.forEach(s => {
+                        const btn = document.createElement('button');
+                        btn.className = 'suggestion-btn';
+                        btn.innerText = s;
+                        btn.onclick = () => {
+                            queryInput.value = s;
+                            sendQuery();
+                        };
+                        group.appendChild(btn);
+                    });
+                    chartsArea.appendChild(panel);
+                }
+
+                // Case 2: AMBIGUOUS (Candidates)
+                if (result.status === 'AMBIGUOUS' && result.candidates && result.candidates.length > 0) {
+                    const panel = document.createElement('div');
+                    panel.className = 'clarification-panel';
+                    const originalQuery = queryInput.value || result.query;
+                    panel.innerHTML = `
+                        <div class="clarification-title">🔍 Did you mean?</div>
+                        <div class="suggestion-group"></div>
+                    `;
+                    const group = panel.querySelector('.suggestion-group');
+                    result.candidates.forEach(c => {
+                        const btn = document.createElement('button');
+                        btn.className = 'suggestion-btn';
+                        btn.innerText = c;
+                        btn.onclick = () => {
+                            const refined = originalQuery.replace(/(amount|value|metric|total|kpi|metric)/i, c);
+                            queryInput.value = refined;
+                            sendQuery();
+                        };
+                        group.appendChild(btn);
+                    });
+                    chartsArea.appendChild(panel);
+                }
             }
 
             // Display Charts

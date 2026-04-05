@@ -47,6 +47,7 @@ class EvalRecord:
     semantic_applied:    bool
     latency_ms:          float
     failure_type:        Optional[str]
+    failure_reason:      Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -158,6 +159,10 @@ class Evaluator:
         plan_6d = result.get("plan_6d") or {}
         execution_mode = plan_6d.get("mode") or result.get("execution_mode")
 
+        # Extract failure reason from trace if present
+        trace = result.get("trace", {})
+        failure_reason = trace.get("failure_reason")
+
         rec = EvalRecord(
             query=query,
             dataset=dataset,
@@ -167,6 +172,7 @@ class Evaluator:
             semantic_applied=semantic_applied,
             latency_ms=round(latency_ms, 2),
             failure_type=failure,
+            failure_reason=failure_reason,
         )
 
         self.records.append(rec)

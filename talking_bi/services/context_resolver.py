@@ -75,17 +75,27 @@ class ContextResolver:
         if len(self.context_history) > 3:
             self.context_history.pop(0)
 
-    def get_last_resolved_context(self) -> Optional[Dict[str, Any]]:
-        """Get last resolved intent from context."""
+    def get_last_resolved_context(self, current_columns: List[str] = None) -> Optional[Dict[str, Any]]:
+        """Get last resolved intent from context (with dataset validation)."""
         if not self.context_history:
             return None
         context = self.context_history[-1]
         # Guard against empty context object
         if not context or not isinstance(context, dict):
             return None
-        # Context must have a kpi to be valid (deterministic - no semantic assumptions)
-        if not context.get("kpi"):
+        
+        # Rule 3 Phase 9C: Dataset consistency check
+        kpi = context.get("kpi")
+        if not kpi:
             return None
+            
+        if current_columns is not None:
+             # Case-insensitive column check
+             col_lower = [c.lower() for c in current_columns]
+             if kpi.lower() not in col_lower:
+                 print(f"[6C] Discarding context KPI '{kpi}' - not in current dataset")
+                 return None
+                 
         return context
 
     def _normalize_kpi(self, kpi: str) -> str:
@@ -99,7 +109,25 @@ class ContextResolver:
         self,
         parsed_intent: Dict[str, Any],
         dashboard_plan: Optional[Dict[str, Any]] = None,
+        current_columns: List[str] = None,
     ) -> ResolutionResult:
+        print(f"[TRACE:RESOLVER] Input: {parsed_intent}")
+        if parsed_intent.get("_locked"):
+            print(f"[TRACE:RESOLVER] LOCK ACTIVE: {parsed_intent.get('_lock_source')}")
+
+        # Fix 1: Trend Lock Check (Phase 9C.1)
+        if parsed_intent.get("_locked"):
+            self.add_to_context(parsed_intent)
+            return ResolutionResult(
+                status=ResolutionStatus.RESOLVED.value,
+                intent=parsed_intent.copy(),
+                source_map={},
+                warnings=[],
+                missing_fields=[],
+                context_used=False,
+                context_applied=False,
+            )
+
         """
         Resolve intent using context and fallback rules.
 
@@ -128,7 +156,7 @@ class ContextResolver:
         # Rule 3: Context carry for KPI
         context_applied = False
         if not kpi:
-            last_context = self.get_last_resolved_context()
+            last_context = self.get_last_resolved_context(current_columns)
             if last_context and last_context.get("kpi"):
                 kpi = last_context["kpi"]
                 context_applied = True
@@ -274,10 +302,10 @@ class ContextResolver:
         )
 
     def _resolve_compare(
-        self,
-        parsed_intent: Dict[str, Any],
-        dashboard_plan: Optional[Dict[str, Any]] = None,
+        self, parsed_intent: Dict[str, Any], dashboard_plan: Optional[Dict[str, Any]]
     ) -> ResolutionResult:
+        print(f"[TRACE:RESOLVER:COMPARE] Input: {parsed_intent}")
+
         """
         Resolve COMPARE intent with kpi_1 and kpi_2.
 
@@ -294,8 +322,9 @@ class ContextResolver:
         source_map = {}
         warnings: List[StructuredWarning] = []
         missing_fields = []
+        context_applied = False
 
-        # Resolve kpi_1 (USER > CONTEXT)
+        # Resolve kpi_1 (USER > CONTEXT) - Fix 3 Phase 9C.1
         resolved_kpi_1 = None
         kpi_1_source = None
         if kpi_1:
@@ -304,12 +333,15 @@ class ContextResolver:
             kpi_1_source = "user"
             source_map["kpi_1"] = "user"
         else:
+            # Rule 3 Phase 9C.1: Compare context inheritance
+            print(f"[6C] COMPARE intent missing kpi_1 - searching context")
             # Try context
             context = self.get_last_resolved_context()
             if context and context.get("kpi"):
                 resolved_kpi_1 = self._normalize_kpi(context["kpi"])
                 kpi_1_source = "context"
                 source_map["kpi_1"] = "context"
+                context_applied = True
                 warnings.append(
                     StructuredWarning(
                         type="context_inheritance",

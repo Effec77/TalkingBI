@@ -5,7 +5,7 @@ Exposes evaluator metrics via HTTP.
 """
 
 from fastapi import APIRouter, HTTPException
-from services.evaluator import evaluator_singleton
+from services.evaluator import get_evaluator
 
 router = APIRouter()
 
@@ -26,7 +26,8 @@ async def get_metrics():
     """
     try:
         from services.cache import stats
-        metrics = evaluator_singleton.compute_metrics()
+        evaluator = get_evaluator()
+        metrics = evaluator.compute_metrics()
         
         system_health = "OK" if metrics.get("success_rate", 0) >= 0.9 else "DEGRADED"
         

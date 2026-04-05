@@ -3,9 +3,11 @@ import pandas as pd
 from typing import Dict, List
 import os
 from dotenv import load_dotenv
+from io import BytesIO
 
 from models.contracts import UploadedDataset
 from services.session_manager import create_session
+from services.dataset_profiler import profile_dataset
 
 load_dotenv()
 
@@ -13,32 +15,6 @@ router = APIRouter()
 
 MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", 10))
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
-
-
-def extract_metadata(df: pd.DataFrame, filename: str, session_id: str) -> UploadedDataset:
-    """Extract metadata from DataFrame and create UploadedDataset contract."""
-    
-    # Extract dtypes
-    dtypes = {col: str(df[col].dtype) for col in df.columns}
-    
-    # Calculate missing percentages
-    missing_pct = {col: float(df[col].isna().mean()) for col in df.columns}
-    
-    # Extract sample values (first 3 unique non-null values)
-    sample_values = {
-        col: df[col].dropna().astype(str).unique()[:3].tolist()
-        for col in df.columns
-    }
-    
-    return UploadedDataset(
-        session_id=session_id,
-        filename=filename,
-        columns=list(df.columns),
-        dtypes=dtypes,
-        shape=df.shape,
-        sample_values=sample_values,
-        missing_pct=missing_pct
-    )
 
 
 @router.post("/upload")
@@ -79,7 +55,6 @@ async def upload_csv(file: UploadFile = File(...)):
     
     # Load CSV into DataFrame
     try:
-        from io import BytesIO
         df = pd.read_csv(BytesIO(content))
     except pd.errors.EmptyDataError:
         print(f"[UPLOAD] Error: CSV file is empty")
@@ -108,22 +83,64 @@ async def upload_csv(file: UploadFile = File(...)):
         for col in df.columns
     ]
     
-    # Extract metadata first (before creating session)
+    # Create Advanced Profile (9C.3 Upgrade)
+    from services.dataset_intelligence import DatasetIntelligence
+    profile = DatasetIntelligence(df).build()
+    
+    # Extract metadata for session compatibility
     session_id = str(__import__('uuid').uuid4())  # Generate ID early
-    dataset = extract_metadata(df, file.filename, session_id)
+    dtypes = {col: str(df[col].dtype) for col in df.columns}
+    missing_pct = {col: float(df[col].isna().mean()) for col in df.columns}
+    sample_values = {
+        col: df[col].dropna().astype(str).unique()[:3].tolist()
+        for col in df.columns
+    }
+    
+    dataset = UploadedDataset(
+        session_id=session_id,
+        filename=file.filename,
+        columns=list(df.columns),
+        dtypes=dtypes,
+        shape=df.shape,
+        sample_values=sample_values,
+        missing_pct=missing_pct
+    )
     
     # Create session with metadata
     session_id = create_session(df, dataset)
     
+    # Store intelligence profile directly on the active session
+    from services.session_manager import get_session
+    session = get_session(session_id)
+    if session:
+        session["dil_profile"] = profile
+    
     print(f"[UPLOAD] Session created: {session_id}, shape={df.shape}")
+    
+    # Map profile to Phase 10 API expected format
+    columns_output = {}
+    for col_name, col_meta in profile.items():
+        semantic = col_meta.get("semantic_type")
+        if semantic == "kpi":
+            type_str = "numeric"
+        elif semantic == "dimension":
+            type_str = "categorical"
+        elif semantic == "date":
+            type_str = "datetime"
+        else:
+            type_str = "unknown"
+            
+        columns_output[col_name] = {
+            "type": type_str,
+            "null_pct": col_meta.get("null_pct", 0.0),
+            "unique": col_meta.get("unique", 0),
+            "sample_values": col_meta.get("sample_values", []),
+            "stats": col_meta.get("distribution", {})
+        }
     
     # Return response in strict format
     return {
-        "session_id": session_id,
-        "dataset": {
-            "filename": dataset.filename,
-            "shape": list(dataset.shape),
-            "columns": dataset.columns,
-            "missing_pct": dataset.missing_pct
-        }
+        "dataset_id": session_id,
+        "columns": columns_output,
+        "row_count": len(df)
     }

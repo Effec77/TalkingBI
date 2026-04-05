@@ -52,6 +52,7 @@ class OrchestratorResult:
     data: List[Dict[str, Any]] = field(default_factory=list)  # prepared_data
     charts: List[Dict[str, Any]] = field(default_factory=list)  # chart_specs
     insights: List[Dict[str, Any]] = field(default_factory=list)  # insights
+    candidates: List[str] = field(default_factory=list) # Added for AMBIGUOUS outputs
 
     # Execution plan metadata (Phase 6D)
     plan: Dict[str, Any] = field(default_factory=dict)
@@ -79,6 +80,7 @@ class OrchestratorResult:
             "data": self.data,
             "charts": self.charts,
             "insights": self.insights,
+            "candidates": self.candidates,
             "plan": self.plan,
             "latency_ms": self.latency_ms,
             "warnings": self.warnings,
@@ -97,6 +99,13 @@ class ExecutionTrace:
     """
     Detailed trace of query processing through all phases.
     """
+
+    # Phase 9C.2: Query Preprocessor
+    preprocessed_query: str = ""
+    preprocessor_applied: bool = False
+    deterministic_override: bool = False
+    filter_interpretation: str = ""
+    trend_locked: bool = False
 
     # Phase 6E: Normalization
     normalized_query: str = ""
@@ -142,9 +151,17 @@ class ExecutionTrace:
     kpi_resolution: Dict[str, Any] = field(default_factory=dict)
     trend_detected: bool = False
     trend_dimension: Optional[str] = None
+    context_valid: bool = True
+    failure_reason: Dict[str, Any] = field(default_factory=dict)
+    confidence: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "preprocessed_query": self.preprocessed_query,
+            "preprocessor_applied": self.preprocessor_applied,
+            "deterministic_override": self.deterministic_override,
+            "filter_interpretation": self.filter_interpretation,
+            "trend_locked": self.trend_locked,
             "normalized_query": self.normalized_query,
             "normalization_applied": self.normalization_applied,
             "normalization_changes": self.normalization_changes,
@@ -170,6 +187,9 @@ class ExecutionTrace:
             "kpi_resolution": self.kpi_resolution,
             "trend_detected": self.trend_detected,
             "trend_dimension": self.trend_dimension,
+            "context_valid": self.context_valid,
+            "failure_reason": self.failure_reason,
+            "confidence": self.confidence,
         }
 
 

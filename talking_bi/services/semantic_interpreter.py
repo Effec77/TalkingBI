@@ -476,6 +476,14 @@ class SemanticInterpreter:
         return self.schema_mapper.kpi_candidates
 
     def interpret(self, query: str, intent: Dict[str, Any]) -> Dict[str, Any]:
+        print(f"[TRACE:SEMANTIC] Input: {intent}")
+        if intent.get("_locked"):
+            print(f"[TRACE:SEMANTIC] LOCK ACTIVE: {intent.get('_lock_source')}")
+
+        # Fix 1: Trend Lock Check (Phase 9C.1)
+        if intent.get("_locked"):
+            return intent.copy()
+
         """
         Attempt to resolve a vague query term to a concrete KPI.
 

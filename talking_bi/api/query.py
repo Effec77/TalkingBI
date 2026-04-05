@@ -64,7 +64,34 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
 
     # Delegate to orchestrator
     orchestrator = get_orchestrator()
+    profile = session.get("dil_profile", {})
+    df = session.get("df")
+    
+    # Preprocess Phase 9C.3
+    if profile and df is not None:
+        from services.preprocessor_v2 import preprocess_v2
+        user_query = preprocess_v2(user_query, df, profile)
+        
     result = orchestrator.handle(user_query, session_id)
+    
+    # Post-process Phase 9C.3 Clarifications
+    if result.status == "INCOMPLETE" and profile:
+        from services.clarification_engine import generate_clarifications
+        # Determine missing components from context
+        missing = []
+        if result.intent:
+            if not result.intent.get("kpi"):
+                missing.append("kpi")
+            if not result.intent.get("dimension") and result.intent.get("intent", "UNKNOWN") in ["SEGMENT_BY", "TREND"]:
+                missing.append("dimension")
+                
+        if missing:
+            suggestions = generate_clarifications(user_query, profile, missing)
+            result.insights.append({
+                "type": "SUGGESTION",
+                "summary": "Try asking:",
+                "text": " • " + "\n • ".join(suggestions)
+            })
 
     # Return as JSON
     return result.to_dict()

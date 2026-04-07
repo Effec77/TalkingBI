@@ -16,7 +16,7 @@ SESSION_EXPIRY_HOURS = int(os.getenv("SESSION_EXPIRY_HOURS", 24))
 CLEANUP_INTERVAL_MINUTES = int(os.getenv("CLEANUP_INTERVAL_MINUTES", 10))
 
 
-def create_session(df: pd.DataFrame, metadata=None, dataset_hash: str = "") -> str:
+def create_session(df: pd.DataFrame, user_id: str, org_id: Optional[str] = None, metadata=None, dataset_hash: str = "") -> str:
     """
     Create a new unified session with the provided DataFrame and metadata.
 
@@ -46,6 +46,9 @@ def create_session(df: pd.DataFrame, metadata=None, dataset_hash: str = "") -> s
         "dashboard_plan": None,
         # Phase 8: Evaluation records
         "evaluation_records": [],
+        # SaaS scoping
+        "user_id": user_id,
+        "org_id": org_id,
         # Metadata
         "created_at": now,
         "expires_at": expires_at,

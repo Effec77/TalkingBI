@@ -1,11 +1,53 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 import pandas as pd
 
 
 HIGH_NULL_THRESHOLD_PCT = 30.0
+
+
+def _canonical_value(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    raw = re.sub(r"[^a-z0-9]+", " ", raw).strip()
+    return raw
+
+
+def _is_dimension_col(col: str, profile: Dict[str, Dict[str, Any]]) -> bool:
+    meta = profile.get(col, {}) or {}
+    role = meta.get("role_scores", {}) or {}
+    return float(role.get("is_dimension", 0.0)) == 1.0
+
+
+def _build_dimension_value_map(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]) -> Dict[str, List[str]]:
+    """
+    Return distinct values for low/medium-cardinality dimension columns.
+    Keeps output bounded for stability.
+    """
+    out: Dict[str, List[str]] = {}
+    for col in df.columns:
+        if not _is_dimension_col(col, profile):
+            continue
+        meta = profile.get(col, {}) or {}
+        bucket = str(meta.get("cardinality_bucket", "")).lower()
+        unique_est = int(meta.get("unique", int(df[col].nunique(dropna=True))))
+        if bucket not in {"low", "med", "medium"} and unique_est > 300:
+            continue
+
+        vals = (
+            df[col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+        vals = vals[vals != ""].drop_duplicates()
+        if vals.empty:
+            continue
+        ordered = sorted(vals.tolist(), key=lambda x: x.lower())[:300]
+        out[col] = ordered
+    return out
 
 
 def _infer_mixed_type_columns(df: pd.DataFrame) -> List[str]:
@@ -74,6 +116,7 @@ def build_dataset_summary(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]) 
         "row_count": int(row_count),
         "column_count": int(column_count),
         "columns": columns,
+        "dimension_values": _build_dimension_value_map(df, profile),
         "data_quality": {
             "missing_cells_pct": missing_cells_pct,
             "high_null_columns": high_null_columns,
@@ -140,6 +183,7 @@ def answer_dataset_question(
     row_count = int(summary.get("row_count", 0))
     col_count = int(summary.get("column_count", 0))
     dq = summary.get("data_quality", {}) or {}
+    dimension_values = summary.get("dimension_values", {}) or {}
     missing_cells_pct = dq.get("missing_cells_pct", 0.0)
     high_null_columns = dq.get("high_null_columns", []) or []
     mixed_cols = dq.get("mixed_type_columns", []) or []
@@ -157,6 +201,8 @@ def answer_dataset_question(
         and not c.endswith("_id")
         and c != "id"
     ]
+    if not dim_cols and dimension_values:
+        dim_cols = list(dimension_values.keys())
     time_cols = [
         c
         for c, m in profile.items()
@@ -189,6 +235,100 @@ def answer_dataset_question(
         if not dim_cols:
             return "I could not find any high-confidence dimension columns."
         return f"Dimension columns are: {', '.join(dim_cols[:12])}."
+
+    # Dimension value awareness (e.g., "how many departments are there")
+    singular_alias = {
+        "department": "departments",
+        "team": "teams",
+        "region": "regions",
+        "location": "locations",
+        "office": "offices",
+        "designation": "designations",
+        "role": "roles",
+        "manager": "managers",
+        "specialty": "specialties",
+        "doctor": "doctors",
+        "patient": "patients",
+        "hospital": "hospitals",
+    }
+
+    def _match_dim_for_value_question() -> str | None:
+        q_tokens = set(re.findall(r"[a-z0-9_]+", q))
+        for d in dim_cols:
+            dn = str(d).lower()
+            if dn in q:
+                return d
+            for alias in (dn, dn.rstrip("s"), dn + "s"):
+                if alias and alias in q:
+                    return d
+            for alias in singular_alias.keys():
+                if alias in q and alias in dn:
+                    return d
+            normalized_dn = re.sub(r"[^a-z0-9]+", "_", dn).strip("_")
+            dn_tokens = set([t for t in normalized_dn.split("_") if t])
+            if dn_tokens and dn_tokens.intersection(q_tokens):
+                return d
+        for c in col_names:
+            cn = str(c).lower()
+            if cn in q or cn.rstrip("s") in q:
+                return c
+        return None
+
+    target_dim = _match_dim_for_value_question()
+    if target_dim:
+        dim_meta = profile.get(target_dim, {}) or {}
+        unique_count = int(dim_meta.get("unique", 0) or 0)
+        samples = dim_meta.get("sample_values", []) or []
+        label = singular_alias.get(target_dim.lower(), f"{target_dim}s")
+
+        if ("how many" in q or "count" in q or "number of" in q) and (
+            "are there" in q or "do we have" in q or "exist" in q or target_dim in q
+        ):
+            full_values = dimension_values.get(target_dim, []) or []
+            if full_values:
+                canonical_count = len({_canonical_value(v) for v in full_values if _canonical_value(v)})
+                if canonical_count > 0 and canonical_count != len(full_values):
+                    return (
+                        f"There are {len(full_values)} raw unique {label} "
+                        f"({canonical_count} after normalization of case/spelling variants)."
+                    )
+                return f"There are {len(full_values)} unique {label} in this dataset."
+            if unique_count <= 0:
+                return f"I could not determine how many {label} are present."
+            if samples:
+                return (
+                    f"There are {unique_count} unique {label} in this dataset. "
+                    f"Examples: {', '.join([str(x) for x in samples[:6]])}."
+                )
+            return f"There are {unique_count} unique {label} in this dataset."
+
+        if any(p in q for p in ["what are", "which are", "list", "show"]) and (
+            target_dim in q or any(a in q for a in ["department", "team", "region", "location", "office"])
+        ):
+            full_values = dimension_values.get(target_dim, []) or []
+            if full_values:
+                if len(full_values) > 30:
+                    preview = ", ".join([str(x) for x in full_values[:30]])
+                    return (
+                        f"All {label} ({len(full_values)}): {preview}, ... "
+                        f"(showing first 30)."
+                    )
+                return f"All {label} ({len(full_values)}): {', '.join([str(x) for x in full_values])}."
+            if samples:
+                return f"Sample {label}: {', '.join([str(x) for x in samples[:12]])}."
+            return f"I identified {unique_count} unique values in '{target_dim}'."
+
+    # Generic unique-value questions when dimension can be inferred loosely
+    if any(p in q for p in ["how many unique", "how many distinct", "list all", "show all"]):
+        for d in dim_cols:
+            if d in q or d.rstrip("s") in q:
+                full_values = dimension_values.get(d, []) or []
+                if full_values and ("how many" in q or "count" in q):
+                    return f"There are {len(full_values)} unique values in {d}."
+                if full_values:
+                    preview = ", ".join([str(x) for x in full_values[:30]])
+                    tail = ", ..." if len(full_values) > 30 else ""
+                    return f"Values in {d} ({len(full_values)}): {preview}{tail}."
 
     # Time awareness
     if "time column" in q or "date column" in q:

@@ -9,6 +9,13 @@ from api.run import router as run_router
 from api.query import router as query_router
 from api.metrics import router as metrics_router
 from services.session_manager import start_cleanup_scheduler
+from auth.routes import router as auth_router
+from database import engine, Base
+from auth.models import User, Organization, UserAPIKey, AuthActivityLog, ensure_auth_schema  # Ensure models are loaded for create_all
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+ensure_auth_schema(engine)
 
 
 @asynccontextmanager
@@ -22,11 +29,22 @@ async def lifespan(app: FastAPI):
     print("Session cleanup scheduler stopped")
 
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app = FastAPI(
     title="Talking BI — Phase 10",
     description="Product Layer: CSV upload, AI Dataset Profiler, Chat Interface, LLM Pipeline, Analytics & Trace Visibility",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+# CORS Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # For development, allow all. Change to specific frontend origin in production.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Mount static files
@@ -38,6 +56,7 @@ app.include_router(intelligence_router, tags=["intelligence"])
 app.include_router(run_router, tags=["run"])
 app.include_router(query_router, tags=["query"])
 app.include_router(metrics_router, tags=["metrics"])
+app.include_router(auth_router)
 
 
 @app.get("/")

@@ -11,8 +11,7 @@ Priority Order (updated):
 Gemini is reserved for reasoning-heavy tasks that fit within quota.
 """
 import os
-import json
-from typing import Optional, Dict, List
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -50,6 +49,7 @@ class LLMManager:
 
         # Cache for responses
         self.cache = {}
+        self.request_timeout = int(os.getenv("LLM_REQUEST_TIMEOUT_SEC", "15"))
     
     def call_llm(self, prompt: str, cache_key: Optional[str] = None) -> Optional[str]:
         """
@@ -113,7 +113,10 @@ class LLMManager:
         
         genai.configure(api_key=key)
         model = genai.GenerativeModel('gemini-pro-latest')
-        response = model.generate_content(prompt)
+        response = model.generate_content(
+            prompt,
+            request_options={"timeout": self.request_timeout},
+        )
         return response.text
     
     def _call_groq(self, key: str, prompt: str) -> str:
@@ -125,20 +128,33 @@ class LLMManager:
             model="llama-3.1-8b-instant",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
-            max_tokens=1024
+            max_tokens=1024,
+            timeout=self.request_timeout,
         )
         return completion.choices[0].message.content
     
     def _call_mistral(self, key: str, prompt: str) -> str:
         """Call Mistral API"""
-        from mistralai import Mistral
-        
-        client = Mistral(api_key=key)
-        response = client.chat.complete(
-            model="mistral-small-latest",
-            messages=[{"role": "user", "content": prompt}]
-        )
-        return response.choices[0].message.content
+        try:
+            from mistralai import Mistral
+
+            client = Mistral(api_key=key)
+            response = client.chat.complete(
+                model="mistral-small-latest",
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return response.choices[0].message.content
+        except Exception:
+            # Backward compatibility for older mistralai package versions.
+            from mistralai.client import MistralClient
+            from mistralai.models.chat_completion import ChatMessage
+
+            client = MistralClient(api_key=key)
+            response = client.chat(
+                model="mistral-small-latest",
+                messages=[ChatMessage(role="user", content=prompt)],
+            )
+            return response.choices[0].message.content
     
     def _call_openrouter(self, key: str, prompt: str) -> str:
         """Call OpenRouter API"""
@@ -153,7 +169,8 @@ class LLMManager:
             json={
                 "model": "meta-llama/llama-3.1-8b-instruct:free",
                 "messages": [{"role": "user", "content": prompt}]
-            }
+            },
+            timeout=self.request_timeout,
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]

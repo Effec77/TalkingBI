@@ -5,16 +5,17 @@ Slim HTTP layer that delegates to QueryOrchestrator.
 No business logic here - just HTTP boundary concerns.
 """
 
-from uuid import uuid4
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
+from typing import Any, Dict, Optional
 
 from models.contracts import OrchestratorResult
 from services.orchestrator import get_orchestrator
 from services.session_manager import get_session, delete_session
 from services.query_suggester import generate_suggestions
-from services.dataset_awareness import answer_dataset_question
+from services.dataset_awareness import answer_dataset_question, build_dataset_summary
 from services.dataset_query_engine import answer_data_question
+from auth.dependencies import get_current_user, get_current_user_optional
 
 router = APIRouter()
 
@@ -25,8 +26,71 @@ class QueryPayload(BaseModel):
     query: str = ""
 
 
+def _trace_envelope(trace_data: Any) -> Dict[str, Any]:
+    return {
+        "available": trace_data is not None,
+        "data": trace_data if trace_data is not None else {},
+    }
+
+
+def _build_context_suggestions(
+    profile: Dict[str, Any], session: Dict[str, Any], user_query: str, intent: Dict[str, Any] | None
+) -> Dict[str, Any]:
+    context = {
+        "last_query": user_query,
+        "kpi": (intent or {}).get("kpi") or (intent or {}).get("kpi_1"),
+        "dimension": (intent or {}).get("dimension"),
+        "intent": (intent or {}).get("intent"),
+    }
+    session["suggestion_context"] = context
+    return generate_suggestions(profile, context=context)
+
+
+def _attach_meta_and_trace(
+    payload: Dict[str, Any], trace_data: Any, trace_enabled: bool = False
+) -> Dict[str, Any]:
+    payload["trace"] = _trace_envelope(trace_data)
+    payload["meta"] = {"trace_enabled": trace_enabled}
+    return payload
+
+
+def _verify_session_access(session_id: str, user: Optional[Any]) -> Dict[str, Any]:
+    session = get_session(session_id)
+    if not session:
+        raise HTTPException(
+            status_code=404, detail=f"Session {session_id} not found or expired"
+        )
+
+    # Public sessions are intentionally accessible without auth token.
+    if session.get("user_id") == "public":
+        return session
+
+    if user is None:
+        raise HTTPException(
+            status_code=401, detail="Authentication required for this session"
+        )
+
+    # Check ownership
+    is_owner = session.get("user_id") == user.id
+
+    # Check org admin access (must belong to same org and be admin)
+    is_org_admin = (
+        user.role == "admin"
+        and user.org_id is not None
+        and session.get("org_id") == user.org_id
+    )
+
+    if not (is_owner or is_org_admin):
+        # Hide existence to prevent session scanning
+        raise HTTPException(
+            status_code=404, detail=f"Session {session_id} not found or expired"
+        )
+
+    return session
+
+
 @router.post("/query/{session_id}")
-async def query_endpoint(session_id: str, payload: QueryPayload):
+async def query_endpoint(session_id: str, payload: QueryPayload, user=Depends(get_current_user_optional)):
     """
     Phase 9: Conversation-aware query endpoint.
 
@@ -44,6 +108,8 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
         OrchestratorResult as JSON
     """
     user_query = payload.query
+    user_email = getattr(user, "email", "public")
+    print(f"[QUERY] User={user_email}, session={session_id}, query='{user_query}'")
 
     # Guard 1: Query length
     if len(user_query) > 500:
@@ -52,51 +118,47 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
         )
 
     # Guard 2: Session validation
-    session = get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=404, detail=f"Session {session_id} not found or expired"
-        )
+    session = _verify_session_access(session_id, user)
 
-    # Guard 3: Dataset size
     df = session.get("df")
-    if df is not None and df.shape[0] > 100_000:
-        raise HTTPException(
-            status_code=413, detail="Dataset too large (max 100,000 rows)"
-        )
 
     app_mode = (session.get("app_mode") or "both").lower()
     if app_mode == "dashboard":
-        return {
-            "status": "INCOMPLETE",
+        return _attach_meta_and_trace({
+            "status": "MODE_BLOCKED",
             "query": user_query,
             "session_id": session_id,
+            "message": "Querying is disabled in dashboard-only mode.",
             "intent": {"intent": "MODE_BLOCKED", "kpi": None, "dimension": None, "filter": None},
             "semantic_meta": {"applied": False, "source": "mode_guard"},
             "data": [],
             "charts": [],
-            "insights": [
-                {
-                    "type": "MODE",
-                    "summary": "This session is in dashboard mode. Re-upload with mode=query or mode=both to run chat queries.",
-                    "text": "This session is in dashboard mode. Re-upload with mode=query or mode=both to run chat queries.",
-                }
-            ],
+            "primary_insight": "Querying is disabled in dashboard-only mode.",
+            "insights": [],
             "candidates": [],
             "plan": {"mode": "dashboard_only"},
             "latency_ms": 0.0,
             "warnings": ["Query mode disabled for this session."],
             "errors": [],
-            "trace": {"parser_used": "mode_guard"},
-        }
+            "suggestions": {"type": "followup", "items": []},
+        }, {"parser_used": "mode_guard"})
 
     # DAL metadata QA path (Phase 11)
     # Deterministic, no LLM, answers dataset-understanding questions directly.
     profile = session.get("dil_profile", {}) or {}
     dataset_summary = session.get("dataset_summary", {}) or {}
+    if not dataset_summary or "dimension_values" not in dataset_summary:
+        try:
+            dataset_summary = build_dataset_summary(df, profile)
+            session["dataset_summary"] = dataset_summary
+        except Exception:
+            dataset_summary = dataset_summary or {}
     dal_answer = answer_dataset_question(user_query, dataset_summary, profile)
     if dal_answer:
-        return {
+        suggestions_payload = _build_context_suggestions(
+            profile, session, user_query, {"intent": "DATASET_AWARENESS"}
+        )
+        return _attach_meta_and_trace({
             "status": "RESOLVED",
             "query": user_query,
             "session_id": session_id,
@@ -104,6 +166,7 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
             "semantic_meta": {"applied": False, "source": "dataset_awareness"},
             "data": [],
             "charts": [],
+            "primary_insight": dal_answer,
             "insights": [
                 {
                     "type": "DATASET_AWARENESS",
@@ -116,8 +179,11 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
             "latency_ms": 0.0,
             "warnings": [],
             "errors": [],
-            "trace": {"parser_used": "dataset_awareness"},
-        }
+            "suggestions": {
+                "type": suggestions_payload.get("type", "followup"),
+                "items": suggestions_payload.get("items", []),
+            },
+        }, {"parser_used": "dataset_awareness"})
 
     # Dataset Query Engine (Phase 11): deterministic SQL-like QA
     dq_context = session.get("dataset_query_context", {}) or {}
@@ -129,7 +195,10 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
         new_ctx = data_answer.get("context")
         if new_ctx is not None:
             session["dataset_query_context"] = new_ctx
-        return {
+        suggestions_payload = _build_context_suggestions(
+            profile, session, user_query, {"intent": "DATASET_QUERY"}
+        )
+        return _attach_meta_and_trace({
             "status": "RESOLVED",
             "query": user_query,
             "session_id": session_id,
@@ -137,6 +206,7 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
             "semantic_meta": {"applied": False, "source": "dataset_query_engine"},
             "data": [{"kpi": "answer", "type": "timeseries", "data": table}] if table else [],
             "charts": charts,
+            "primary_insight": answer_text,
             "insights": [
                 {
                     "type": "DATASET_QUERY",
@@ -149,8 +219,11 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
             "latency_ms": 0.0,
             "warnings": [],
             "errors": [],
-            "trace": {"parser_used": "dataset_query_engine"},
-        }
+            "suggestions": {
+                "type": suggestions_payload.get("type", "followup"),
+                "items": suggestions_payload.get("items", []),
+            },
+        }, {"parser_used": "dataset_query_engine"})
 
     # Delegate to orchestrator
     orchestrator = get_orchestrator()
@@ -182,18 +255,41 @@ async def query_endpoint(session_id: str, payload: QueryPayload):
                 "text": " • " + "\n • ".join(suggestions)
             })
 
-    # Return as JSON
-    return result.to_dict()
+    response = result.to_dict()
+    suggestions_payload = _build_context_suggestions(
+        profile, session, user_query, response.get("intent")
+    )
+
+    # Derive primary insight from insight list if possible.
+    primary_insight = None
+    for item in response.get("insights", []) or []:
+        if isinstance(item, dict):
+            primary_insight = item.get("summary") or item.get("text")
+        elif isinstance(item, str):
+            primary_insight = item
+        if primary_insight:
+            break
+    response["primary_insight"] = primary_insight
+    response["suggestions"] = {
+        "type": suggestions_payload.get("type", "followup"),
+        "items": suggestions_payload.get("items", []),
+    }
+
+    trace_data = response.get("trace")
+    print(f"[QUERY] Success: session={session_id}, status={response.get('status')}")
+    return _attach_meta_and_trace(response, trace_data, trace_enabled=False)
 
 
 @router.delete("/session/{session_id}")
-async def delete_session_endpoint(session_id: str):
+async def delete_session_endpoint(session_id: str, user=Depends(get_current_user)):
     """
     Explicitly delete a session and free resources.
 
     Returns:
         Success confirmation
     """
+    session = _verify_session_access(session_id, user)
+
     success = delete_session(session_id)
     if not success:
         raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
@@ -206,18 +302,14 @@ async def delete_session_endpoint(session_id: str):
 
 
 @router.get("/session/{session_id}/status")
-async def get_session_status(session_id: str):
+async def get_session_status(session_id: str, user=Depends(get_current_user)):
     """
     Get health check status for a session.
 
     Returns:
         Session metadata and health indicators
     """
-    session = get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=404, detail=f"Session {session_id} not found or expired"
-        )
+    session = _verify_session_access(session_id, user)
 
     return {
         "session_id": session_id,
@@ -233,7 +325,7 @@ async def get_session_status(session_id: str):
 
 
 @router.get("/suggest")
-async def suggest_queries(session_id: str, q: str = ""):
+async def suggest_queries(session_id: str, q: str = "", user=Depends(get_current_user_optional)):
     """
     Deterministic query suggestions from DIL profile.
 
@@ -241,31 +333,23 @@ async def suggest_queries(session_id: str, q: str = ""):
     - session_id: required session identifier
     - q: optional prefix filter (e.g. "show rev")
     """
-    session = get_session(session_id)
-    if not session:
-        raise HTTPException(
-            status_code=404, detail=f"Session {session_id} not found or expired"
-        )
+    session = _verify_session_access(session_id, user)
 
     profile = session.get("dil_profile") or {}
-    app_mode = (session.get("app_mode") or "both").lower()
-    if app_mode == "query":
-        return {
-            "session_id": session_id,
-            "prefix": q or "",
-            "suggestions": [],
-        }
-
-    result = generate_suggestions(profile, prefix=q or "")
+    context = session.get("suggestion_context") or None
+    result = generate_suggestions(profile, context=context, prefix=q or "")
 
     return {
         "session_id": session_id,
         "prefix": q or "",
-        "suggestions": result.get("suggestions", []),
+        "suggestions": {
+            "type": result.get("type", "initial"),
+            "items": result.get("items", result.get("suggestions", [])),
+        },
     }
 
 
 @router.get("/suggest/{session_id}")
-async def suggest_queries_by_path(session_id: str, q: str = ""):
+async def suggest_queries_by_path(session_id: str, q: str = "", user=Depends(get_current_user_optional)):
     """Path alias for suggestion endpoint."""
-    return await suggest_queries(session_id=session_id, q=q)
+    return await suggest_queries(session_id=session_id, q=q, user=user)

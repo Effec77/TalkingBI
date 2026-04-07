@@ -8,6 +8,9 @@ import pandas as pd
 MAX_CHARTS = 4
 MAX_KPIS = 2
 MAX_DIMS = 2
+MAX_WORKING_ROWS = 300_000
+MAX_CATEGORY_POINTS = 20
+MAX_TREND_POINTS = 120
 
 
 def _clean_name_score(name: str) -> float:
@@ -130,6 +133,12 @@ def _safe_numeric(series: pd.Series) -> pd.Series:
     return pd.to_numeric(cleaned, errors="coerce")
 
 
+def _working_df(df: pd.DataFrame) -> pd.DataFrame:
+    if len(df) <= MAX_WORKING_ROWS:
+        return df
+    return df.sample(n=MAX_WORKING_ROWS, random_state=42).sort_index()
+
+
 def _kpi_card(df: pd.DataFrame, col: str) -> Dict[str, Any]:
     s = _safe_numeric(df[col]).dropna()
     if s.empty:
@@ -158,6 +167,7 @@ def _bar_chart(df: pd.DataFrame, kpi_col: str, dim_col: str) -> Optional[Dict[st
     if temp.empty:
         return None
     grouped = temp.groupby(dim_col, dropna=False)[kpi_col].sum().reset_index()
+    grouped = grouped.sort_values(kpi_col, ascending=False).head(MAX_CATEGORY_POINTS)
     if grouped.empty:
         return None
     return {
@@ -178,6 +188,16 @@ def _trend_chart(df: pd.DataFrame, kpi_col: str, time_col: str) -> Optional[Dict
     if temp.empty:
         return None
     grouped = temp.groupby(time_col)[kpi_col].sum().reset_index().sort_values(time_col)
+    if len(grouped) > MAX_TREND_POINTS:
+        grouped = (
+            grouped.set_index(time_col)
+            .resample("ME")[kpi_col]
+            .sum()
+            .reset_index()
+            .sort_values(time_col)
+        )
+    if len(grouped) > MAX_TREND_POINTS:
+        grouped = grouped.tail(MAX_TREND_POINTS)
     if grouped.empty:
         return None
     return {
@@ -208,18 +228,34 @@ def generate_auto_dashboard(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]
     """
     Build deterministic default dashboard payload immediately on upload.
     """
-    selected_kpis = _select_kpis(profile, df=df)
+    df_work = _working_df(df)
+    selected_kpis = _select_kpis(profile, df=df_work)
     selected_dims = _select_dimensions(profile)
     time_col = _select_time_column(profile)
 
-    kpi_cards = [_kpi_card(df, col) for col in selected_kpis]
+    if not selected_kpis:
+        return {
+            "kpis": [],
+            "charts": [],
+            "insights": [],
+            "fallback": {
+                "message": "No strong numeric metrics detected in this dataset.",
+                "suggestions": [
+                    "show column distribution",
+                    "list columns",
+                    "show sample data",
+                ],
+            },
+        }
+
+    kpi_cards = [_kpi_card(df_work, col) for col in selected_kpis]
 
     charts: List[Dict[str, Any]] = []
 
     # Chart 1..N: KPI by dimension (up to 2 charts total)
     for kpi_col in selected_kpis:
         for dim_col in selected_dims[:1]:
-            chart = _bar_chart(df, kpi_col, dim_col)
+            chart = _bar_chart(df_work, kpi_col, dim_col)
             if chart:
                 charts.append(chart)
             if len(charts) >= MAX_CHARTS:
@@ -229,13 +265,13 @@ def generate_auto_dashboard(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]
 
     # Trend chart (if time exists)
     if len(charts) < MAX_CHARTS and selected_kpis and time_col:
-        trend = _trend_chart(df, selected_kpis[0], time_col)
+        trend = _trend_chart(df_work, selected_kpis[0], time_col)
         if trend:
             charts.append(trend)
 
     # Distribution chart
     if len(charts) < MAX_CHARTS and selected_kpis:
-        hist = _histogram_chart(df, selected_kpis[0])
+        hist = _histogram_chart(df_work, selected_kpis[0])
         if hist:
             charts.append(hist)
 
@@ -243,4 +279,5 @@ def generate_auto_dashboard(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]
         "kpis": kpi_cards,
         "charts": charts[:MAX_CHARTS],
         "insights": [],
+        "fallback": None,
     }

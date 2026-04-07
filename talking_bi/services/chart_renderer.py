@@ -5,6 +5,12 @@ Renders actual chart images from prepared data.
 Uses matplotlib for deterministic, backend-safe rendering.
 """
 
+import os
+
+# Render containers can fail if matplotlib tries to cache fonts in a non-writable home.
+os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+
 import matplotlib
 
 matplotlib.use("Agg")

@@ -1,3 +1,5 @@
+> Legacy module README. For the current professional project documentation, see [`/README.md`](../README.md).
+
 <div align="center">
 
 # 🎯 Talking BI - Phase 0A
@@ -388,3 +390,119 @@ Contributions are welcome! Please follow these steps:
 [Report Bug](issues) • [Request Feature](issues)
 
 </div>
+# Talking BI
+
+[![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Production-009688.svg)](https://fastapi.tiangolo.com/)
+[![Status](https://img.shields.io/badge/Phase-11-success.svg)](#phase-status)
+
+Deterministic, explainable analytics for CSV datasets.
+
+This section is the canonical README for the current product state (Phase 11).  
+The older Phase 0A content below is legacy and should be ignored.
+
+## Phase Status
+
+- Phase 10 complete
+- Phase 11 complete:
+1. Dataset Awareness Layer
+2. Auto Dashboard Generator
+3. Insight Engine
+4. Deterministic Query Suggestion Engine
+5. Session modes (`dashboard`, `query`, `both`)
+
+## Architecture
+
+```mermaid
+flowchart TD
+    A["CSV Upload"] --> B["Dataset Intelligence (DIL)"]
+    B --> C["Dataset Awareness Layer"]
+    C --> D["Auto Dashboard Generator"]
+    D --> E["Insight Engine"]
+    E --> F["Query Suggestion Engine"]
+    F --> G["Chat Query Orchestrator"]
+    G --> H["Execution Engine + Charts + Trace"]
+```
+
+## Quick Start
+
+```bash
+git clone https://github.com/Effec77/TalkingBI.git
+cd TalkingBI/talking_bi
+python -m venv venv
+```
+
+Windows:
+```powershell
+.\venv\Scripts\Activate.ps1
+```
+
+```bash
+pip install -r requirements.txt
+copy .env.example .env
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+## API
+
+Base URL: `http://127.0.0.1:8000`
+
+- `GET /health`
+- `POST /upload?mode=dashboard|query|both`
+- `POST /query/{session_id}`
+- `GET /suggest?session_id={id}&q={prefix}`
+- `GET /suggest/{session_id}?q={prefix}`
+- `DELETE /session/{session_id}`
+- `GET /session/{session_id}/status`
+- `GET /metrics`
+- `GET /metrics/session/{session_id}`
+- `GET /metrics/comparison`
+
+## Upload Response Shape
+
+```json
+{
+  "dataset_id": "uuid",
+  "columns": {},
+  "row_count": 0,
+  "profile": {},
+  "dataset_summary": {},
+  "dataset_summary_text": "",
+  "dashboard": {
+    "kpis": [],
+    "charts": [],
+    "insights": []
+  },
+  "suggestions": []
+}
+```
+
+## Security and Secrets
+
+- `.env` is gitignored and must remain private.
+- `.env.example` contains placeholders only.
+- API keys are loaded from environment variables at runtime.
+
+Minimum secure practice:
+1. Never commit `.env` or raw keys.
+2. Rotate compromised keys immediately.
+3. Keep keys in a secrets manager for deployed environments.
+
+## Main Components
+
+- `api/`: HTTP boundary and endpoint routing
+- `services/dataset_awareness.py`: metadata-first dataset understanding
+- `services/dashboard_generator.py`: deterministic upload-time dashboard
+- `services/insight_engine.py`: deterministic top/low/trend/anomaly insights
+- `services/query_suggester.py`: valid, ranked query suggestions
+- `services/dataset_query_engine.py`: SQL-like deterministic query answering
+- `graph/`: locked core execution pipeline
+
+## Testing
+
+```bash
+python phase11_test.py
+python tests/e2e_production_test.py
+```
+
+---

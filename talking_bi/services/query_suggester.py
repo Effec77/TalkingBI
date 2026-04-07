@@ -59,38 +59,104 @@ def _suggestion_score(
     return score
 
 
-def generate_suggestions(profile: Dict[str, Dict[str, Any]], prefix: str = "") -> Dict[str, List[str]]:
+def _sample_value_for_dimension(meta: Dict[str, Any]) -> str | None:
+    samples = meta.get("sample_values", []) or []
+    if not samples:
+        return None
+    return str(samples[0])
+
+
+def _followup_candidates(
+    profile: Dict[str, Dict[str, Any]], context: Dict[str, Any]
+) -> List[Tuple[float, str]]:
+    kpis, dimensions, time_cols = _extract_components(profile)
+    if not kpis:
+        return []
+
+    ctx_kpi = str(context.get("kpi") or "").strip().lower()
+    ctx_dim = str(context.get("dimension") or "").strip().lower()
+
+    chosen_kpi = ctx_kpi if ctx_kpi in kpis else kpis[0]
+    scored: List[Tuple[float, str]] = []
+
+    # keep same-kpi exploration
+    scored.append((_suggestion_score(profile, chosen_kpi), f"show {chosen_kpi}"))
+
+    # dimension drill-down
+    if ctx_dim and ctx_dim in dimensions:
+        scored.append(
+            (_suggestion_score(profile, chosen_kpi, dimension=ctx_dim), f"show {chosen_kpi} by {ctx_dim}")
+        )
+        sample = _sample_value_for_dimension(profile.get(ctx_dim, {}))
+        if sample:
+            scored.append(
+                (_suggestion_score(profile, chosen_kpi, dimension=ctx_dim) + 0.05, f"show {chosen_kpi} where {ctx_dim} = {sample}")
+            )
+    else:
+        for dim in dimensions[:1]:
+            scored.append(
+                (_suggestion_score(profile, chosen_kpi, dimension=dim), f"show {chosen_kpi} by {dim}")
+            )
+
+    # time continuation
+    if time_cols:
+        scored.append((_suggestion_score(profile, chosen_kpi, with_time=True), f"show {chosen_kpi} over time"))
+
+    # compare continuation
+    for alt in kpis:
+        if alt == chosen_kpi:
+            continue
+        pair_score = (_suggestion_score(profile, chosen_kpi) + _suggestion_score(profile, alt)) / 2
+        scored.append((pair_score + 0.1, f"compare {chosen_kpi} with {alt}"))
+        break
+
+    return scored
+
+
+def generate_suggestions(
+    profile: Dict[str, Dict[str, Any]],
+    context: Dict[str, Any] | None = None,
+    prefix: str = "",
+) -> Dict[str, Any]:
     """
     Deterministic query suggestion generation from DIL profile.
     """
     kpis, dimensions, time_cols = _extract_components(profile)
     if not kpis:
-        return {"suggestions": []}
+        return {"type": "initial", "items": [], "suggestions": []}
 
     scored: List[Tuple[float, str]] = []
+    suggestion_type = "initial"
 
-    # Template 1: show {kpi}
-    for kpi in kpis:
-        scored.append((_suggestion_score(profile, kpi), f"show {kpi}"))
+    if context:
+        followup = _followup_candidates(profile, context)
+        if followup:
+            scored.extend(followup)
+            suggestion_type = "followup"
 
-    # Template 2: show {kpi} by {dimension}
-    for kpi in kpis:
-        for dim in dimensions[:2]:
-            scored.append((_suggestion_score(profile, kpi, dimension=dim), f"show {kpi} by {dim}"))
-
-    # Template 3: show {kpi} over time
-    if time_cols:
+    if not scored:
+        # Template 1: show {kpi}
         for kpi in kpis:
-            scored.append((_suggestion_score(profile, kpi, with_time=True), f"show {kpi} over time"))
+            scored.append((_suggestion_score(profile, kpi), f"show {kpi}"))
 
-    # Template 4: compare {kpi1} with {kpi2}
-    if len(kpis) >= 2:
-        for i in range(len(kpis)):
-            for j in range(i + 1, len(kpis)):
-                k1 = kpis[i]
-                k2 = kpis[j]
-                pair_score = (_suggestion_score(profile, k1) + _suggestion_score(profile, k2)) / 2
-                scored.append((pair_score, f"compare {k1} with {k2}"))
+        # Template 2: show {kpi} by {dimension}
+        for kpi in kpis:
+            for dim in dimensions[:2]:
+                scored.append((_suggestion_score(profile, kpi, dimension=dim), f"show {kpi} by {dim}"))
+
+        # Template 3: show {kpi} over time
+        if time_cols:
+            for kpi in kpis:
+                scored.append((_suggestion_score(profile, kpi, with_time=True), f"show {kpi} over time"))
+
+        # Template 4: compare {kpi1} with {kpi2}
+        if len(kpis) >= 2:
+            for i in range(len(kpis)):
+                for j in range(i + 1, len(kpis)):
+                    k1 = kpis[i]
+                    k2 = kpis[j]
+                    pair_score = (_suggestion_score(profile, k1) + _suggestion_score(profile, k2)) / 2
+                    scored.append((pair_score, f"compare {k1} with {k2}"))
 
     # Deduplicate while keeping best score for each suggestion.
     best: Dict[str, float] = {}
@@ -105,4 +171,5 @@ def generate_suggestions(profile: Dict[str, Dict[str, Any]], prefix: str = "") -
         p = prefix.strip().lower()
         suggestions = [s for s in suggestions if s.lower().startswith(p)]
 
-    return {"suggestions": suggestions[:MAX_SUGGESTIONS]}
+    items = suggestions[:MAX_SUGGESTIONS]
+    return {"type": suggestion_type, "items": items, "suggestions": items}

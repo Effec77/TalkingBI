@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
 import pandas as pd
 from typing import Dict, List
 import os
@@ -14,6 +14,7 @@ from services.dataset_awareness import (
 from services.dashboard_generator import generate_auto_dashboard
 from services.insight_engine import generate_insights
 from services.query_suggester import generate_suggestions
+from auth.dependencies import get_current_user_optional
 
 load_dotenv()
 
@@ -27,6 +28,7 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 async def upload_csv(
     file: UploadFile = File(...),
     mode: str = Query(default="both", pattern="^(dashboard|query|both)$"),
+    user=Depends(get_current_user_optional),
 ):
     """
     Upload a CSV file and create a session.
@@ -97,13 +99,13 @@ async def upload_csv(
     profile = DatasetIntelligence(df).build()
     dataset_summary = build_dataset_summary(df, profile)
     dataset_summary_text = generate_human_summary(dataset_summary)
-    dashboard = {"kpis": [], "charts": [], "insights": []}
-    suggestions = []
+    dashboard = {"kpis": [], "charts": [], "insights": [], "primary_insight": None, "fallback": None}
+    suggestions_payload = generate_suggestions(profile)
     if mode in ("dashboard", "both"):
         dashboard = generate_auto_dashboard(df, profile)
         insight_payload = generate_insights(df, profile, dashboard)
+        dashboard["primary_insight"] = insight_payload.get("primary_insight")
         dashboard["insights"] = insight_payload.get("insights", [])
-        suggestions = generate_suggestions(profile).get("suggestions", [])
     
     # Extract metadata for session compatibility
     session_id = str(__import__('uuid').uuid4())  # Generate ID early
@@ -125,7 +127,9 @@ async def upload_csv(
     )
     
     # Create session with metadata
-    session_id = create_session(df, dataset)
+    user_id = str(getattr(user, "id", "public"))
+    org_id = getattr(user, "org_id", None)
+    session_id = create_session(df, user_id, org_id, metadata=dataset)
     
     # Store intelligence profile directly on the active session
     from services.session_manager import get_session
@@ -135,7 +139,7 @@ async def upload_csv(
         session["dataset_summary"] = dataset_summary
         session["dataset_summary_text"] = dataset_summary_text
         session["dashboard"] = dashboard
-        session["suggestions"] = suggestions
+        session["suggestions"] = suggestions_payload
         session["app_mode"] = mode
     
     print(f"[UPLOAD] Session created: {session_id}, shape={df.shape}")
@@ -171,5 +175,8 @@ async def upload_csv(
         "dataset_summary": dataset_summary,
         "dataset_summary_text": dataset_summary_text,
         "dashboard": dashboard,
-        "suggestions": suggestions,
+        "suggestions": {
+            "type": suggestions_payload.get("type", "initial"),
+            "items": suggestions_payload.get("items", []),
+        },
     }

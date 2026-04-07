@@ -212,6 +212,21 @@ def generate_auto_dashboard(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]
     selected_dims = _select_dimensions(profile)
     time_col = _select_time_column(profile)
 
+    if not selected_kpis:
+        return {
+            "kpis": [],
+            "charts": [],
+            "insights": [],
+            "fallback": {
+                "message": "No strong numeric metrics detected in this dataset.",
+                "suggestions": [
+                    "show column distribution",
+                    "list columns",
+                    "show sample data",
+                ],
+            },
+        }
+
     kpi_cards = [_kpi_card(df, col) for col in selected_kpis]
 
     charts: List[Dict[str, Any]] = []
@@ -243,4 +258,5 @@ def generate_auto_dashboard(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]]
         "kpis": kpi_cards,
         "charts": charts[:MAX_CHARTS],
         "insights": [],
+        "fallback": None,
     }

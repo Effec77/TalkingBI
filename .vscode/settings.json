@@ -1,0 +1,5 @@
+{
+  "css.lint.unknownAtRules": "ignore",
+  "scss.lint.unknownAtRules": "ignore",
+  "python.defaultInterpreterPath": "talking_bi/venv/Scripts/python.exe"
+}

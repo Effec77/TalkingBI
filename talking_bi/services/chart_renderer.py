@@ -6,18 +6,31 @@ Uses matplotlib for deterministic, backend-safe rendering.
 """
 
 import os
-
-# Render containers can fail if matplotlib tries to cache fonts in a non-writable home.
-os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
-os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
-
-import matplotlib
-
-matplotlib.use("Agg")
-
-import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
+
+_PLT = None
+
+
+def _get_plt():
+    """
+    Lazy-load matplotlib only when rendering is requested.
+    This prevents startup failures/timeouts before the web server binds to PORT.
+    """
+    global _PLT
+    if _PLT is not None:
+        return _PLT
+
+    os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
+    os.makedirs(os.environ["MPLCONFIGDIR"], exist_ok=True)
+
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _PLT = plt
+    return _PLT
 
 
 class ChartRenderer:
@@ -40,6 +53,7 @@ class ChartRenderer:
             return None
 
         try:
+            plt = _get_plt()
             x = [d[x_key] for d in data]
             y = [d[y_key] for d in data]
 
@@ -84,6 +98,7 @@ class ChartRenderer:
             return None
 
         try:
+            plt = _get_plt()
             x = [d[x_key] for d in data]
             y = [d[y_key] for d in data]
 

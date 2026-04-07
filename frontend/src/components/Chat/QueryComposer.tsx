@@ -13,6 +13,7 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
   const setInput = useQueryStore((s) => s.setInput);
   
   const sessionId = useSessionStore((s) => s.id);
+  const setSuggestions = useSessionStore((s) => s.setSuggestions);
   const addToHistory = useQueryStore((s) => s.addToHistory);
   const setLoading = useQueryStore((s) => s.setLoading);
   const loading = useQueryStore((s) => s.loading);
@@ -32,6 +33,9 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
         response: res,
         status: res.status,
       });
+      if (Array.isArray(res?.suggestions?.items)) {
+        setSuggestions(res.suggestions.items);
+      }
 
       setInput("");
     } catch (err: any) {
@@ -68,14 +72,14 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
   return (
     <form 
         onSubmit={handleQuery}
-        className={`flex items-center space-x-2 px-6 py-4 bg-transparent ${borderNone ? '' : 'border border-[#414751]/20 rounded-2xl'}`}
+        className={`flex items-center space-x-2 px-4 py-3 bg-transparent ${borderNone ? '' : 'border border-[#cfd8ea] rounded-xl bg-white'}`}
     >
         <div className="flex-1 relative">
             <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Converse with your dataset..."
-                className="w-full bg-transparent border-none focus:ring-0 text-[#e3e0f1] placeholder-[#c1c7d2]/30 text-lg py-2 pr-12"
+                className="w-full bg-transparent border-none focus:ring-0 text-[#17325f] placeholder-[#94a3b8] text-base py-2 pr-12"
                 autoFocus
             />
             <button
@@ -83,8 +87,8 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
                 onClick={startListening}
                 className={`absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-full transition-all ${
                     isListening 
-                    ? 'text-[#a0caff] animate-pulse shadow-[0_0_15px_rgba(160,202,255,0.4)] bg-[#a0caff]/10' 
-                    : 'text-[#c1c7d2]/40 hover:text-[#a0caff] hover:bg-[#a0caff]/5'
+                    ? 'text-[#2f5597] animate-pulse shadow-[0_0_12px_rgba(47,85,151,0.25)] bg-[#dfe9ff]' 
+                    : 'text-[#64748b] hover:text-[#2f5597] hover:bg-[#eff4ff]'
                 }`}
             >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -92,7 +96,7 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
                 </svg>
             </button>
             {loading && (
-                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex items-center space-x-2 text-[#a0caff]">
+                <div className="absolute right-12 top-1/2 -translate-y-1/2 flex items-center space-x-2 text-[#2f5597]">
                     <span className="text-[10px] uppercase tracking-widest font-bold animate-pulse">Calculating...</span>
                 </div>
             )}
@@ -103,8 +107,8 @@ export default function QueryComposer({ borderNone = false }: QueryComposerProps
             disabled={loading || !input} 
             className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
                 input && !loading 
-                ? 'bg-gradient-to-r from-[#a0caff] to-[#4f94dd] text-[#003259] shadow-[0_0_20px_rgba(160,202,255,0.4)]' 
-                : 'bg-[#414751]/20 text-[#e3e0f1]/20'
+                ? 'bg-gradient-to-r from-[#4f7fcb] to-[#2f5597] text-white shadow-sm' 
+                : 'bg-[#e2e8f0] text-[#94a3b8]'
             }`}
         >
             {loading ? (

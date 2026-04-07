@@ -14,14 +14,16 @@ from services.dataset_awareness import (
 from services.dashboard_generator import generate_auto_dashboard
 from services.insight_engine import generate_insights
 from services.query_suggester import generate_suggestions
+from services.cache import query_cache
 from auth.dependencies import get_current_user_optional
 
 load_dotenv()
 
 router = APIRouter()
 
-MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", 10))
+MAX_FILE_SIZE_MB = int(os.getenv("MAX_FILE_SIZE_MB", 200))
 MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+PROFILE_SAMPLE_MAX_ROWS = int(os.getenv("PROFILE_SAMPLE_MAX_ROWS", 200000))
 
 
 @router.post("/upload")
@@ -96,8 +98,19 @@ async def upload_csv(
     
     # Create Advanced Profile (9C.3 Upgrade)
     from services.dataset_intelligence import DatasetIntelligence
-    profile = DatasetIntelligence(df).build()
-    dataset_summary = build_dataset_summary(df, profile)
+    profile_df = df
+    profile_mode = "full"
+    if len(df) > PROFILE_SAMPLE_MAX_ROWS:
+        # Deterministic sampling for large datasets keeps upload responsive.
+        profile_df = (
+            df.sample(n=PROFILE_SAMPLE_MAX_ROWS, random_state=42)
+            .sort_index()
+            .reset_index(drop=True)
+        )
+        profile_mode = "sampled"
+
+    profile = DatasetIntelligence(profile_df).build()
+    dataset_summary = build_dataset_summary(profile_df, profile)
     dataset_summary_text = generate_human_summary(dataset_summary)
     dashboard = {"kpis": [], "charts": [], "insights": [], "primary_insight": None, "fallback": None}
     suggestions_payload = generate_suggestions(profile)
@@ -112,7 +125,14 @@ async def upload_csv(
     dtypes = {col: str(df[col].dtype) for col in df.columns}
     missing_pct = {col: float(df[col].isna().mean()) for col in df.columns}
     sample_values = {
-        col: df[col].dropna().astype(str).unique()[:3].tolist()
+        col: (
+            df[col]
+            .dropna()
+            .astype(str)
+            .head(5000)
+            .unique()[:3]
+            .tolist()
+        )
         for col in df.columns
     }
     
@@ -141,6 +161,12 @@ async def upload_csv(
         session["dashboard"] = dashboard
         session["suggestions"] = suggestions_payload
         session["app_mode"] = mode
+        session["profile_mode"] = profile_mode
+        session["profile_row_count"] = len(profile_df)
+
+    # Invalidate stale cross-session query cache entries for deterministic behavior
+    # after parser/suggester upgrades and dataset re-uploads with same filename.
+    query_cache.clear()
     
     print(f"[UPLOAD] Session created: {session_id}, shape={df.shape}")
     
@@ -170,6 +196,8 @@ async def upload_csv(
         "dataset_id": session_id,
         "columns": columns_output,
         "row_count": len(df),
+        "profile_row_count": len(profile_df),
+        "profile_mode": profile_mode,
         "profile": profile,
         "mode": mode,
         "dataset_summary": dataset_summary,

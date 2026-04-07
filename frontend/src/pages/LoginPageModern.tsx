@@ -35,6 +35,15 @@ const LoginPageModern: React.FC = () => {
       const response = await authService.login({ email, password });
       const user = authService.decodeUserFromToken(response.access_token);
       setAuth(user, response.access_token);
+      try {
+        const me = await authService.me();
+        setAuth(
+          { id: me.id, email: me.email, role: me.role, org_id: me.org_id, display_name: me.display_name ?? null, avatar_url: me.avatar_url ?? null },
+          response.access_token
+        );
+      } catch {
+        // fallback to decoded token
+      }
       navigate("/");
     } catch (error: any) {
       const message = String(error?.message || "");
@@ -144,10 +153,18 @@ const LoginPageModern: React.FC = () => {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-3">
-            <button className="h-11 flex items-center justify-center bg-[#181d33] border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-[#1d2440] transition-colors">
+            <button
+              type="button"
+              onClick={() => authService.startOAuth("google")}
+              className="h-11 flex items-center justify-center bg-[#181d33] border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-[#1d2440] transition-colors"
+            >
               Google
             </button>
-            <button className="h-11 flex items-center justify-center bg-[#181d33] border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-[#1d2440] transition-colors">
+            <button
+              type="button"
+              onClick={() => authService.startOAuth("github")}
+              className="h-11 flex items-center justify-center bg-[#181d33] border border-white/10 text-slate-300 text-sm font-bold rounded-xl hover:bg-[#1d2440] transition-colors"
+            >
               GitHub
             </button>
           </div>

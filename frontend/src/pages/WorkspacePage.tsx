@@ -7,12 +7,81 @@ import QueryComposer from "../components/Chat/QueryComposer";
 import { runQuery } from "../services/queryService";
 import Layout from "../components/Common/Layout";
 import GlassCard from "../components/Common/GlassCard";
-import KPIStats from "../components/Dashboard/KPIStats";
+import KPIStatsPower from "../components/Dashboard/KPIStatsPower";
+
+const toText = (value: unknown): string => {
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (value && typeof value === "object") {
+        const obj = value as Record<string, unknown>;
+        const preferred = obj.summary ?? obj.text ?? obj.message ?? obj.title;
+        if (typeof preferred === "string") return preferred;
+    }
+    return "";
+};
+
+const normalizeQueryLabel = (query: string): string => {
+    return query
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+};
+
+const buildFallbackSuggestions = (datasetSummary: any): string[] => {
+    const columns = Array.isArray(datasetSummary?.columns) ? datasetSummary.columns : [];
+    const kpis = columns
+        .filter((c: any) => c?.semantic_type === "kpi")
+        .map((c: any) => c?.name)
+        .filter(Boolean);
+    const dims = columns
+        .filter((c: any) => c?.semantic_type === "dimension")
+        .map((c: any) => c?.name)
+        .filter(Boolean);
+    const times = columns
+        .filter((c: any) => c?.semantic_type === "date" || c?.semantic_type === "time")
+        .map((c: any) => c?.name)
+        .filter(Boolean);
+
+    const suggestions: string[] = [];
+    const kpi = kpis[0];
+    if (kpi) suggestions.push(`show ${kpi}`);
+    if (kpi && dims[0]) suggestions.push(`show ${kpi} by ${dims[0]}`);
+    if (kpi && times[0]) suggestions.push(`show ${kpi} over time`);
+    if (kpis.length > 1) suggestions.push(`compare ${kpis[0]} with ${kpis[1]}`);
+    if (dims[0]) suggestions.push(`list top 5 ${dims[0]} by ${kpi || "value"}`);
+
+    return [...new Set(suggestions)].slice(0, 8);
+};
+
+const toDisplayLabel = (v: unknown): string => {
+    return String(v ?? "")
+        .replace(/_/g, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/\b\w/g, (m) => m.toUpperCase());
+};
+
+const mapDashboardKpisToCards = (kpis: any[]): Array<{ label: string; value: string | number; description?: string }> => {
+    if (!Array.isArray(kpis)) return [];
+    return kpis
+        .slice(0, 4)
+        .map((k) => {
+            const label = toDisplayLabel(k?.name || k?.label || "Metric");
+            const raw = k?.total ?? k?.value ?? k?.average ?? k?.max ?? k?.min ?? "-";
+            const value = typeof raw === "number" ? raw.toLocaleString(undefined, { maximumFractionDigits: 2 }) : String(raw);
+            const description = typeof k?.average === "number"
+                ? `avg ${k.average.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
+                : undefined;
+            return { label, value, description };
+        })
+        .filter((x) => x.label !== "Metric" || x.value !== "-");
+};
 
 const WorkspacePage: React.FC = () => {
     const navigate = useNavigate();
     const reset = useSessionStore((s) => s.clearSession);
     const session = useSessionStore((s) => s);
+    const setSuggestions = useSessionStore((s) => s.setSuggestions);
     const lastResult = useQueryStore((s) => s.lastResult);
 
     const setInput = useQueryStore((s) => s.setInput);
@@ -26,6 +95,9 @@ const WorkspacePage: React.FC = () => {
         try {
             const res = await runQuery(session.id, suggestion);
             addToHistory({ query: suggestion, response: res, status: res.status });
+            if (Array.isArray(res?.suggestions?.items)) {
+                setSuggestions(res.suggestions.items);
+            }
         } catch (err: any) {
             console.error(err);
         }
@@ -54,120 +126,155 @@ const WorkspacePage: React.FC = () => {
         );
     }
 
+    const mode = session.mode || "both";
+    const isDashboardMode = mode === "dashboard";
+    const isQueryMode = mode === "query";
+
     const mainChart = session.dashboard?.charts?.[0];
     const secondaryCharts = session.dashboard?.charts?.slice(1) || [];
-    const supportingInsights = session.dashboard?.insights?.slice(0, 5) || [];
-    const mainSuggestions = session.suggestions?.slice(0, 6) || [];
+    const supportingInsights = (session.dashboard?.insights || [])
+        .map((i: unknown) => toText(i))
+        .filter((i: string) => i.length > 0)
+        .slice(0, 5);
+    const computedFallbackSuggestions = buildFallbackSuggestions(session.datasetSummary);
+    const mainSuggestions = (session.suggestions?.length ? session.suggestions : computedFallbackSuggestions).slice(0, 8);
     const kpis = session.dashboard?.kpis || [];
+    const kpiCards = mapDashboardKpisToCards(kpis);
 
     return (
         <Layout>
-            <div className="max-w-5xl mx-auto space-y-8 pb-32 px-4 relative">
-                
-                {/* [ HEADER ] */}
-                <header className="flex justify-between items-center border-b border-slate-800 pb-4 mt-8">
-                    <div className="flex items-center space-x-4">
-                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Context Active</span>
-                         <span className="text-[10px] font-mono text-slate-600">{session.id}</span>
+            <div className="space-y-6 px-2">
+                <header className="rounded-xl bg-[#1e3a72] text-white px-5 py-4 border border-[#2e4f8d] shadow-sm">
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight">Dataset Analysis Dashboard</h1>
+                            <p className="text-sm text-blue-100/90">PowerBI-style insight surface for business users</p>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 min-w-[360px]">
+                            <div className="bg-[#284b87] border border-[#3c62a5] rounded px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-widest text-blue-100">Mode</p>
+                                <p className="text-sm font-semibold">{mode.toUpperCase()}</p>
+                            </div>
+                            <div className="bg-[#284b87] border border-[#3c62a5] rounded px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-widest text-blue-100">Rows</p>
+                                <p className="text-sm font-semibold">{session.datasetSummary?.row_count ?? "-"}</p>
+                            </div>
+                            <div className="bg-[#284b87] border border-[#3c62a5] rounded px-3 py-2">
+                                <p className="text-[10px] uppercase tracking-widest text-blue-100">Columns</p>
+                                <p className="text-sm font-semibold">{session.datasetSummary?.column_count ?? "-"}</p>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-slate-700/30 pb-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#16335f] border border-[#315087] text-[10px] uppercase tracking-widest text-white">
+                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                            Session Active
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-300">{session.id}</span>
+                        <span className="text-[10px] uppercase tracking-widest text-[#4f94dd]">mode: {mode}</span>
                     </div>
                     <button
                         onClick={() => { reset(); navigate("/"); }}
-                        className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-300 transition-colors"
+                        className="text-[10px] font-bold uppercase tracking-widest text-red-500 hover:text-red-400 transition-colors"
                     >
                         Terminate Session
                     </button>
                 </header>
 
-                {/* PRIMARY INSIGHT */}
-                <section className="py-6">
-                    <h1 className="text-4xl font-bold tracking-tight text-white leading-tight max-w-4xl">
-                        {session.dashboard?.primary_insight}
-                    </h1>
-                </section>
-
-                <section>
-                    <KPIStats 
-                        metrics={kpis.length > 0 ? kpis.slice(0, 4) : [
-                            { label: 'Data Points', value: supportingInsights.length || 0 },
-                            { label: 'Visualizations', value: (session.dashboard?.charts?.length) || 0 },
-                            { label: 'Status', value: 'Ready' },
-                            { label: 'Confidence', value: 'High' }
-                        ]} 
-                    />
-                </section>
-
-                {mainChart && (
-                    <section>
-                         <GlassCard className="!p-8">
-                             <div className="flex items-center space-x-3 mb-6">
-                                 <span className="text-xs font-bold uppercase tracking-widest text-blue-400">Main Analysis</span>
-                             </div>
-                             <ResultRenderer result={{ status: "RESOLVED", charts: [mainChart] }} />
-                         </GlassCard>
-                    </section>
-                )}
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 pt-8">
-                    <section className="space-y-6">
-                        <div className="flex items-center space-x-4">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Key Evidence</h3>
-                        </div>
-                        <ul className="space-y-4">
-                            {supportingInsights.map((insight: string, idx: number) => (
-                                <li key={idx} className="flex items-start space-x-4">
-                                    <span className="text-blue-500 font-bold text-sm mt-0.5">0{idx + 1}</span>
-                                    <p className="text-slate-300 leading-relaxed">
-                                        {insight}
-                                    </p>
-                                </li>
-                            ))}
-                        </ul>
-                    </section>
-
-                    <section className="space-y-6">
-                        <div className="flex items-center space-x-4">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Explorations</h3>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                            {mainSuggestions.map((s: string, i: number) => (
-                                <button 
-                                    key={i} 
-                                    onClick={() => handleSuggestionClick(s)}
-                                    className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-xs text-slate-300 hover:border-blue-500/50 hover:bg-slate-700 hover:text-white transition-all shadow-sm"
-                                >
-                                    {s}
-                                </button>
-                            ))}
-                        </div>
-                    </section>
-                </div>
-
-                {secondaryCharts.length > 0 && (
-                    <section className="pt-16 space-y-8">
-                         <div className="flex items-center space-x-4">
-                            <h3 className="text-xs font-bold uppercase tracking-widest text-slate-500">Additional Visuals</h3>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {secondaryCharts.map((c: any, i: number) => (
-                                <GlassCard key={i} className="!p-6 border-slate-800 bg-slate-900 shadow-xl">
-                                     <ResultRenderer result={{ status: "RESOLVED", charts: [c] }} />
+                <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+                    <section className="xl:col-span-9 space-y-7">
+                        {!isQueryMode && (
+                            <>
+                                <GlassCard className="!p-8 !bg-white !border-[#cfd8ea] shadow-sm">
+                                    <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Primary insight</p>
+                                    <h1 className="text-3xl font-bold tracking-tight text-[#17325f] leading-tight">
+                                        {toText(session.dashboard?.primary_insight) || "Dataset ready for exploration"}
+                                    </h1>
                                 </GlassCard>
-                            ))}
-                        </div>
-                    </section>
-                )}
 
-                {/* COMMAND BAR - fixed-height simpler layout */}
-                <div className="fixed bottom-0 left-0 lg:left-64 right-0 bg-[#0f172a]/95 border-t border-slate-800 p-6 z-50 backdrop-blur-md">
-                    <div className="max-w-4xl mx-auto flex flex-col space-y-4">
-                        {lastResult && (
-                             <GlassCard className="!p-6 border-blue-900/50 shadow-2xl bg-slate-900">
-                                <ResultRenderer result={lastResult} />
-                             </GlassCard>
+                                <KPIStatsPower
+                                    metrics={kpiCards.length > 0 ? kpiCards : [
+                                        { label: "Data Points", value: supportingInsights.length || 0 },
+                                        { label: "Visualizations", value: (session.dashboard?.charts?.length) || 0 },
+                                        { label: "Status", value: "Ready" },
+                                        { label: "Confidence", value: "High" }
+                                    ]}
+                                />
+                            </>
                         )}
-                        <QueryComposer borderNone />
-                    </div>
+
+                        {!isDashboardMode && (
+                            <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
+                                <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Ask dataset</p>
+                                <QueryComposer borderNone />
+                            </GlassCard>
+                        )}
+
+                        {lastResult && (
+                            <GlassCard className="!p-6 !bg-white !border-[#cfd8ea] shadow-sm">
+                                <ResultRenderer result={lastResult} />
+                            </GlassCard>
+                        )}
+
+                        {!isQueryMode && mainChart && (
+                            <GlassCard className="!p-6 !bg-white !border-[#cfd8ea] shadow-sm">
+                                <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-4">Main chart</p>
+                                <ResultRenderer result={{ status: "RESOLVED", charts: [mainChart] }} />
+                            </GlassCard>
+                        )}
+
+                        {!isQueryMode && secondaryCharts.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+                                {secondaryCharts.map((c: any, i: number) => (
+                                    <GlassCard key={i} className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm self-start">
+                                        <ResultRenderer result={{ status: "RESOLVED", charts: [c] }} />
+                                    </GlassCard>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    <aside className="xl:col-span-3 space-y-4 xl:sticky xl:top-6 self-start">
+                        {isDashboardMode && (
+                            <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
+                                <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Ask dataset</p>
+                                <p className="text-sm text-slate-600">
+                                    Querying is disabled for this session because mode is set to dashboard.
+                                </p>
+                            </GlassCard>
+                        )}
+
+                        {supportingInsights.length > 0 && (
+                            <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
+                                <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Insights</p>
+                                <ul className="space-y-3">
+                                    {supportingInsights.map((insight: string, idx: number) => (
+                                        <li key={idx} className="text-sm text-slate-700 leading-relaxed">{insight}</li>
+                                    ))}
+                                </ul>
+                            </GlassCard>
+                        )}
+
+                        <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
+                            <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Suggestions</p>
+                            <div className="flex flex-wrap gap-2">
+                                {mainSuggestions.length > 0 ? mainSuggestions.map((s: string, i: number) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => handleSuggestionClick(s)}
+                                        className="px-3 py-2 bg-[#eff4ff] border border-[#c6d4ee] rounded-lg text-xs text-[#1f3a6b] hover:bg-[#dfe9ff] hover:border-[#9cb5e3] transition-all"
+                                    >
+                                        {normalizeQueryLabel(s)}
+                                    </button>
+                                )) : (
+                                    <p className="text-sm text-slate-500">No suggestions available for this session yet.</p>
+                                )}
+                            </div>
+                        </GlassCard>
+                    </aside>
                 </div>
             </div>
         </Layout>

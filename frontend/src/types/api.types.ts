@@ -4,6 +4,8 @@ export interface UploadResponse {
   dataset_id: string;
   columns: Record<string, any>;
   row_count: number;
+  profile_row_count?: number;
+  profile_mode?: "full" | "sampled";
   profile: any;
 
   dataset_summary: any;
@@ -68,4 +70,47 @@ export interface UserLogin {
 export interface TokenResponse {
   access_token: string;
   token_type: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: string;
+  org_id: string | null;
+  display_name?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ProfileUpdateRequest {
+  display_name?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface APIKeyInfo {
+  id: string;
+  provider: string;
+  label?: string | null;
+  secret_masked: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface APIKeyUpsertRequest {
+  provider: string;
+  label?: string | null;
+  secret: string;
+}
+
+export interface ActivityInfo {
+  id: string;
+  event_type: string;
+  provider?: string | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
+  created_at: string;
 }

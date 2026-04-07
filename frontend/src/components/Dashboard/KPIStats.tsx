@@ -12,12 +12,12 @@ const KPIStats: React.FC<{ metrics: KPIProps[] }> = ({ metrics }) => {
     return (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {metrics.map((m, i) => (
-                <GlassCard key={i} className="border-slate-800 bg-slate-900 group">
+                <GlassCard key={i} className="border-[#cfd8ea] bg-white group shadow-sm">
                     <div className="space-y-2 relative z-10">
-                        <div className="flex justify-between items-start opacity-40 group-hover:opacity-100 transition-opacity">
-                            <h3 className="text-[9px] font-bold uppercase tracking-[0.2em] text-[#e3e0f1]">{m.label}</h3>
+                        <div className="flex justify-between items-start">
+                            <h3 className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[#2f4b7f]">{m.label}</h3>
                             {m.trend && (
-                                <span className={`text-[10px] font-bold ${m.trend === 'up' ? 'text-[#a0caff]' : m.trend === 'down' ? 'text-[#ffb4ab]' : 'text-[#c1c7d2]'}`}>
+	                                <span className={`text-[11px] font-bold ${m.trend === 'up' ? 'text-[#2f5597]' : m.trend === 'down' ? 'text-[#ba3f6c]' : 'text-[#64748b]'}`}>
                                     {m.trend === 'up' ? '↑' : m.trend === 'down' ? '↓' : '→'}
                                 </span>
                             )}

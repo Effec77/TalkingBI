@@ -4,6 +4,8 @@ import WorkspacePage from "./pages/WorkspacePage";
 import LoginPage from "./pages/LoginPageModern";
 import RegisterPage from "./pages/RegisterPageModern";
 import ResetPasswordPage from "./pages/ResetPasswordPageModern";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
+import SettingsPage from "./pages/SettingsPage";
 import { useAuthStore } from "./store/useAuthStore";
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
@@ -18,6 +20,7 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route
           path="/"
           element={
@@ -31,6 +34,14 @@ function App() {
           element={
             <ProtectedRoute>
               <WorkspacePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />

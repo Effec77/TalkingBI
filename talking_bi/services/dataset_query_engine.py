@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+MAX_WORKING_ROWS = 300_000
+
 
 def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (text or "").lower()).strip("_")
@@ -28,6 +30,10 @@ def _best_column(term: str, columns: List[str]) -> Optional[str]:
     if not term or not columns:
         return None
     t = _norm(term)
+    if t.endswith("ies"):
+        t = t[:-3] + "y"
+    elif t.endswith("s"):
+        t = t[:-1]
     col_map = {_norm(c): c for c in columns}
     if t in col_map:
         return col_map[t]
@@ -114,6 +120,12 @@ def _norm_series(s: pd.Series) -> pd.Series:
         .str.replace(r"[^a-z0-9]+", "_", regex=True)
         .str.strip("_")
     )
+
+
+def _working_df(df: pd.DataFrame) -> pd.DataFrame:
+    if len(df) <= MAX_WORKING_ROWS:
+        return df
+    return df.sample(n=MAX_WORKING_ROWS, random_state=42).sort_index()
 
 
 def _extract_subquery_filter(query: str, columns: List[str]) -> Tuple[Optional[str], List[str]]:
@@ -204,7 +216,7 @@ def _extract_rank_request(query: str) -> Tuple[Optional[str], Optional[int]]:
 def _extract_rank_metric(query: str, kpis: List[str]) -> Optional[str]:
     q = query.lower()
     # try explicit metric words first
-    for term in ["salary", "performance", "performance_score", "revenue", "profit", "cost", "amount"]:
+    for term in ["salary", "salaries", "performance", "performances", "performance_score", "revenue", "profit", "cost", "amount"]:
         if term in q:
             mapped = _best_column(term, kpis)
             if mapped:
@@ -229,16 +241,62 @@ def _extract_department_list(query: str) -> List[str]:
         # Generic pattern: "in a, b, c"
         m2 = re.search(r"\bin\s+([a-z0-9_ ,.-]+)$", q)
         if m2 and "," in m2.group(1):
-            raw2 = m2.group(1).replace(" and ", ",")
+            raw2 = (
+                m2.group(1)
+                .replace("respectively", "")
+                .replace("respecitvely", "")
+                .replace("respective", "")
+                .replace(" and ", ",")
+            )
             vals2 = [v.strip(" .\"'") for v in raw2.split(",") if v.strip(" .\"'")]
             return vals2[:20]
         return []
 
     raw = m.group(1)
-    raw = raw.replace("respectively", "")
+    raw = raw.replace("respectively", "").replace("respecitvely", "").replace("respective", "")
     raw = raw.replace(" and ", ",")
     vals = [v.strip(" .\"'") for v in raw.split(",") if v.strip(" .\"'")]
     return vals[:20]
+
+
+def _extract_in_list_values(query: str) -> List[str]:
+    """
+    Parse generic filters like:
+    - in engg, mktg, sales respectively
+    - in engg and mktg
+    """
+    q = query.lower()
+    m = re.search(r"\bin\s+([a-z0-9_ ,.\-]+)", q)
+    if not m:
+        return []
+    raw = m.group(1)
+    raw = re.split(r"\b(department|departments|team|teams|where|for|with)\b", raw)[0]
+    raw = raw.replace("respectively", "").replace("respecitvely", "").replace("respective", "")
+    raw = raw.replace(" and ", ",")
+    vals = [v.strip(" .\"'") for v in raw.split(",") if v.strip(" .\"'")]
+    return vals[:20]
+
+
+def _infer_dimension_for_values(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]], values: List[str]) -> Optional[str]:
+    wanted = [_norm(v) for v in values if _norm(v)]
+    if not wanted:
+        return None
+    dims = _dimension_columns(profile)
+    best_col: Optional[str] = None
+    best_hits = 0
+    for d in dims:
+        if d not in df.columns:
+            continue
+        s = _norm_series(df[d].dropna())
+        if s.empty:
+            continue
+        hits = 0
+        for w in wanted:
+            hits += int(((s == w) | s.str.contains(w, regex=False) | pd.Series([w in x for x in s], index=s.index)).sum())
+        if hits > best_hits:
+            best_hits = hits
+            best_col = d
+    return best_col if best_hits > 0 else None
 
 
 def _match_dim_values(series: pd.Series, wanted_values: List[str]) -> pd.Series:
@@ -260,12 +318,32 @@ def _pick_metric_from_query(query: str, kpis: List[str], fallback: Optional[str]
     for k in kpis:
         if _norm(k) in _norm(q):
             return k
-    for term in ["salary", "performance", "revenue", "profit", "cost", "amount"]:
+    for term in ["salary", "salaries", "performance", "revenue", "profit", "cost", "amount", "metric", "value"]:
         if term in q:
             mapped = _best_column(term, kpis)
             if mapped:
                 return mapped
     return fallback or (kpis[0] if kpis else None)
+
+
+def _infer_dimension_for_value(df: pd.DataFrame, profile: Dict[str, Dict[str, Any]], value: str) -> Optional[str]:
+    wanted = _norm(value)
+    if not wanted:
+        return None
+    dims = _dimension_columns(profile)
+    best_col: Optional[str] = None
+    best_hits = 0
+    for d in dims:
+        if d not in df.columns:
+            continue
+        s = _norm_series(df[d].dropna())
+        if s.empty:
+            continue
+        hits = int(((s == wanted) | s.str.contains(wanted, regex=False) | pd.Series([wanted in x for x in s], index=s.index)).sum())
+        if hits > best_hits:
+            best_hits = hits
+            best_col = d
+    return best_col if best_hits > 0 else None
 
 
 def answer_data_question(
@@ -282,8 +360,37 @@ def answer_data_question(
     if not q:
         return None
 
-    columns = list(df.columns)
+    df_work = _working_df(df)
+    columns = list(df_work.columns)
     kpis = _kpi_columns(profile)
+    metric_candidates = list(kpis)
+    if not metric_candidates:
+        # Fallback for cases where DIL KPI tagging is conservative/missed.
+        metric_candidates = [c for c in df_work.columns if pd.api.types.is_numeric_dtype(df_work[c])]
+
+    # 0) Generic dimension cardinality and value listing
+    if any(term in q for term in ["how many unique", "how many distinct", "how many", "list all", "show all"]):
+        dims = _dimension_columns(profile)
+        target_dim = None
+        for d in dims:
+            dn = _norm(d)
+            if dn in _norm(q) or dn.rstrip("s") in _norm(q):
+                target_dim = d
+                break
+        if target_dim and target_dim in df_work.columns:
+            vals = (
+                df_work[target_dim]
+                .dropna()
+                .astype(str)
+                .str.strip()
+            )
+            vals = vals[vals != ""]
+            unique_vals = sorted(vals.drop_duplicates().tolist(), key=lambda x: x.lower())
+            if "how many" in q or "count" in q:
+                return {"answer": f"There are {len(unique_vals)} unique values in {target_dim}."}
+            preview = ", ".join(unique_vals[:40])
+            suffix = ", ..." if len(unique_vals) > 40 else ""
+            return {"answer": f"Values in {target_dim} ({len(unique_vals)}): {preview}{suffix}."}
 
     # 1) "how many entries in salary column"
     m = re.search(r"how many (entries|records|values).*(?:in|for)\s+(.+?)\s+column", q)
@@ -292,19 +399,19 @@ def answer_data_question(
         col = _best_column(col_term, columns)
         if not col:
             return {"answer": f"I could not find a column matching '{col_term}'."}
-        count = int(df[col].notna().sum())
+        count = int(df_work[col].notna().sum())
         return {"answer": f"There are {count:,} non-null entries in '{col}'."}
 
     # 2) Top-N / Bottom-N ranking (optionally per department list)
     side, n = _extract_rank_request(q)
     if side and n:
-        metric_col = _extract_rank_metric(q, kpis)
+        metric_col = _extract_rank_metric(q, metric_candidates)
         if metric_col:
             id_col = _choose_id_column(columns) or _entity_dimension(q, columns, profile)
             if not id_col:
                 return {"answer": "I could not find an entity column for ranking."}
 
-            temp = df[[id_col, metric_col]].copy()
+            temp = df_work[[id_col, metric_col]].copy()
             temp[metric_col] = _safe_numeric(temp[metric_col])
             temp = temp.dropna(subset=[id_col, metric_col])
             if temp.empty:
@@ -313,9 +420,13 @@ def answer_data_question(
             # Optional department filter with per-department ranking
             dept_col = "department" if "department" in columns else None
             dept_vals = _extract_department_list(q)
+            if not dept_vals:
+                dept_vals = _extract_in_list_values(q)
+            if dept_vals and not dept_col:
+                dept_col = _infer_dimension_for_values(df_work, profile, dept_vals)
             rows = []
             if dept_col and dept_vals:
-                temp = temp.join(df[[dept_col]])
+                temp = temp.join(df_work[[dept_col]])
                 mask = _match_dim_values(temp[dept_col], dept_vals)
                 temp = temp[mask]
                 if temp.empty:
@@ -398,14 +509,14 @@ def answer_data_question(
         if not metric_col:
             return {"answer": "I could not find a metric column for this chart."}
 
-        temp = df[[id_col, metric_col]].copy()
+        temp = df_work[[id_col, metric_col]].copy()
         temp[metric_col] = _safe_numeric(temp[metric_col])
         temp = temp.dropna(subset=[id_col, metric_col])
 
         # Optional department/value filter.
         dim_filter_col, filter_vals = _extract_subquery_filter(q, columns)
-        if dim_filter_col and filter_vals and dim_filter_col in df.columns:
-            temp = temp.join(df[[dim_filter_col]])
+        if dim_filter_col and filter_vals and dim_filter_col in df_work.columns:
+            temp = temp.join(df_work[[dim_filter_col]])
             wanted = {_norm(v) for v in filter_vals}
             temp = temp[_norm_series(temp[dim_filter_col]).isin(wanted)]
 
@@ -449,6 +560,76 @@ def answer_data_question(
             "context": {"last_metric": metric_col, "last_table": table, "id_col": id_col},
         }
 
+    # 3.5) Segment metric query: "show salaries in finance", "show salary in accounts department"
+    if any(w in q for w in ["show", "display", "list", "give"]) and kpis:
+        metric_col = _pick_metric_from_query(q, metric_candidates, fallback=None)
+        if metric_col and any(w in q for w in [" in ", " where ", " for ", " by "]):
+            temp = df_work.copy()
+            temp[metric_col] = _safe_numeric(temp[metric_col])
+            temp = temp.dropna(subset=[metric_col])
+            if temp.empty:
+                return {"answer": f"I could not find valid values for '{metric_col}'."}
+
+            filt_col, filt_vals = _extract_subquery_filter(q, columns)
+            if not filt_col:
+                m = re.search(r"\bin\s+([a-z0-9_.\- ]+)$", q)
+                if m:
+                    raw_val = m.group(1).strip(" .\"'")
+                    raw_val = re.sub(r"\b(department|team|region|location|office)\b", "", raw_val).strip()
+                    if raw_val:
+                        inferred_dim = _infer_dimension_for_value(df_work, profile, raw_val)
+                        if inferred_dim:
+                            filt_col, filt_vals = inferred_dim, [raw_val]
+            if not filt_col:
+                # Support phrasing like: "show salary by finance"
+                m = re.search(r"\bby\s+([a-z0-9_.\- ]+)$", q)
+                if m:
+                    raw_val = m.group(1).strip(" .\"'")
+                    # If query already contains explicit dimension phrase ("by department"), skip.
+                    if raw_val and not any(
+                        _norm(raw_val) == _norm(dim_name) for dim_name in _dimension_columns(profile)
+                    ):
+                        inferred_dim = _infer_dimension_for_value(df_work, profile, raw_val)
+                        if inferred_dim:
+                            filt_col, filt_vals = inferred_dim, [raw_val]
+
+            if filt_col and filt_vals and filt_col in temp.columns:
+                mask = _match_dim_values(temp[filt_col], filt_vals)
+                temp = temp[mask]
+                if temp.empty:
+                    return {"answer": f"I could not find rows where {filt_col} matches {', '.join(filt_vals)}."}
+            else:
+                return None
+
+            group_col = filt_col
+            id_col = _choose_id_column(columns)
+            if id_col and id_col in temp.columns:
+                grouped = temp.groupby(id_col)[metric_col].mean().sort_values(ascending=False).head(20)
+                table = grouped.reset_index().to_dict(orient="records")
+                chart_x = [str(x) for x in grouped.index.tolist()]
+                chart_y = [float(y) for y in grouped.values.tolist()]
+                x_label = id_col
+            else:
+                grouped = temp.groupby(group_col)[metric_col].mean().sort_values(ascending=False).head(20)
+                table = grouped.reset_index().to_dict(orient="records")
+                chart_x = [str(x) for x in grouped.index.tolist()]
+                chart_y = [float(y) for y in grouped.values.tolist()]
+                x_label = group_col
+
+            chart = {
+                "kpi": metric_col.replace("_", " ").title(),
+                "type": "bar",
+                "x": chart_x,
+                "y": chart_y,
+                "title": f"{metric_col.replace('_', ' ').title()} in {', '.join(filt_vals)}",
+            }
+            return {
+                "answer": f"Here is {metric_col.replace('_', ' ')} for {', '.join(filt_vals)}.",
+                "table": table,
+                "charts": [chart],
+                "context": {"last_metric": metric_col, "last_table": table, "id_col": x_label},
+            }
+
     # 4) Highest/lowest/best/worst metric queries
     m = re.search(
         r"(?:who|which[ a-z0-9_/\-]*)\s+has\s+(the\s+)?(highest|lowest|best|worst)\s+([a-z0-9_ ?.,\"']+)",
@@ -467,7 +648,7 @@ def answer_data_question(
         if not dim_col:
             return {"answer": f"I found metric '{metric_col}', but no grouping column to answer who/which."}
 
-        temp = df[[metric_col, dim_col]].copy()
+        temp = df_work[[metric_col, dim_col]].copy()
         temp[metric_col] = _safe_numeric(temp[metric_col])
         temp = temp.dropna(subset=[metric_col, dim_col])
         if temp.empty:
@@ -475,9 +656,9 @@ def answer_data_question(
 
         # Optional subquery filtering: "in 'accounts' department", "such as engg, accounts"
         filt_col, filt_vals = _extract_subquery_filter(q, columns)
-        if filt_col and filt_vals and filt_col in df.columns:
+        if filt_col and filt_vals and filt_col in df_work.columns:
             if filt_col not in temp.columns:
-                temp = temp.join(df[[filt_col]])
+                temp = temp.join(df_work[[filt_col]])
             wanted = {_norm(v) for v in filt_vals}
             temp = temp[_norm_series(temp[filt_col]).isin(wanted)]
             if temp.empty:

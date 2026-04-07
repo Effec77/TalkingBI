@@ -16,6 +16,7 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
   /^\/auth\/login/i,
   /^\/auth\/register/i,
   /^\/auth\/reset-password/i,
+  /^\/auth\/oauth\//i,
   /^\/upload/i,
   /^\/query\//i,
   /^\/suggest/i,

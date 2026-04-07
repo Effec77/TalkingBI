@@ -4,11 +4,11 @@ const StatusBanner: React.FC<{ status: string }> = ({ status }) => {
   if (!status) return null;
 
   const colors: Record<string, string> = {
-    RESOLVED: "bg-[#a0caff]/10 text-[#a0caff] border-[#a0caff]/30",
-    INCOMPLETE: "bg-[#fbbb45]/10 text-[#fbbb45] border-[#fbbb45]/30",
-    AMBIGUOUS: "bg-[#ffb4ab]/10 text-[#ffb4ab] border-[#ffb4ab]/30",
-    INVALID: "bg-[#ffb4ab]/10 text-[#ffb4ab] border-[#ffb4ab]/30",
-    MODE_BLOCKED: "bg-[#414751]/20 text-[#c1c7d2] border-[#414751]/30",
+    RESOLVED: "bg-[#e8f0ff] text-[#1f3a6b] border-[#b9ccef]",
+    INCOMPLETE: "bg-[#fff6df] text-[#8a6a1f] border-[#f0dc9b]",
+    AMBIGUOUS: "bg-[#fff0f2] text-[#9f3658] border-[#f1c6d3]",
+    INVALID: "bg-[#fff0f2] text-[#9f3658] border-[#f1c6d3]",
+    MODE_BLOCKED: "bg-[#eef2f9] text-[#4b5563] border-[#d0d9e8]",
   };
 
   const labels: Record<string, string> = {

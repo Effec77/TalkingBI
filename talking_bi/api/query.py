@@ -13,7 +13,7 @@ from models.contracts import OrchestratorResult
 from services.orchestrator import get_orchestrator
 from services.session_manager import get_session, delete_session
 from services.query_suggester import generate_suggestions
-from services.dataset_awareness import answer_dataset_question
+from services.dataset_awareness import answer_dataset_question, build_dataset_summary
 from services.dataset_query_engine import answer_data_question
 from auth.dependencies import get_current_user, get_current_user_optional
 
@@ -120,12 +120,7 @@ async def query_endpoint(session_id: str, payload: QueryPayload, user=Depends(ge
     # Guard 2: Session validation
     session = _verify_session_access(session_id, user)
 
-    # Guard 3: Dataset size
     df = session.get("df")
-    if df is not None and df.shape[0] > 100_000:
-        raise HTTPException(
-            status_code=413, detail="Dataset too large (max 100,000 rows)"
-        )
 
     app_mode = (session.get("app_mode") or "both").lower()
     if app_mode == "dashboard":
@@ -152,6 +147,12 @@ async def query_endpoint(session_id: str, payload: QueryPayload, user=Depends(ge
     # Deterministic, no LLM, answers dataset-understanding questions directly.
     profile = session.get("dil_profile", {}) or {}
     dataset_summary = session.get("dataset_summary", {}) or {}
+    if not dataset_summary or "dimension_values" not in dataset_summary:
+        try:
+            dataset_summary = build_dataset_summary(df, profile)
+            session["dataset_summary"] = dataset_summary
+        except Exception:
+            dataset_summary = dataset_summary or {}
     dal_answer = answer_dataset_question(user_query, dataset_summary, profile)
     if dal_answer:
         suggestions_payload = _build_context_suggestions(

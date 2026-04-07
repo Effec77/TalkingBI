@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 import pandas as pd
 from typing import Dict, List
 import os
@@ -7,7 +7,13 @@ from io import BytesIO
 
 from models.contracts import UploadedDataset
 from services.session_manager import create_session
-from services.dataset_profiler import profile_dataset
+from services.dataset_awareness import (
+    build_dataset_summary,
+    generate_human_summary,
+)
+from services.dashboard_generator import generate_auto_dashboard
+from services.insight_engine import generate_insights
+from services.query_suggester import generate_suggestions
 
 load_dotenv()
 
@@ -18,7 +24,10 @@ MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
 
 
 @router.post("/upload")
-async def upload_csv(file: UploadFile = File(...)):
+async def upload_csv(
+    file: UploadFile = File(...),
+    mode: str = Query(default="both", pattern="^(dashboard|query|both)$"),
+):
     """
     Upload a CSV file and create a session.
     
@@ -86,6 +95,15 @@ async def upload_csv(file: UploadFile = File(...)):
     # Create Advanced Profile (9C.3 Upgrade)
     from services.dataset_intelligence import DatasetIntelligence
     profile = DatasetIntelligence(df).build()
+    dataset_summary = build_dataset_summary(df, profile)
+    dataset_summary_text = generate_human_summary(dataset_summary)
+    dashboard = {"kpis": [], "charts": [], "insights": []}
+    suggestions = []
+    if mode in ("dashboard", "both"):
+        dashboard = generate_auto_dashboard(df, profile)
+        insight_payload = generate_insights(df, profile, dashboard)
+        dashboard["insights"] = insight_payload.get("insights", [])
+        suggestions = generate_suggestions(profile).get("suggestions", [])
     
     # Extract metadata for session compatibility
     session_id = str(__import__('uuid').uuid4())  # Generate ID early
@@ -114,6 +132,11 @@ async def upload_csv(file: UploadFile = File(...)):
     session = get_session(session_id)
     if session:
         session["dil_profile"] = profile
+        session["dataset_summary"] = dataset_summary
+        session["dataset_summary_text"] = dataset_summary_text
+        session["dashboard"] = dashboard
+        session["suggestions"] = suggestions
+        session["app_mode"] = mode
     
     print(f"[UPLOAD] Session created: {session_id}, shape={df.shape}")
     
@@ -142,5 +165,11 @@ async def upload_csv(file: UploadFile = File(...)):
     return {
         "dataset_id": session_id,
         "columns": columns_output,
-        "row_count": len(df)
+        "row_count": len(df),
+        "profile": profile,
+        "mode": mode,
+        "dataset_summary": dataset_summary,
+        "dataset_summary_text": dataset_summary_text,
+        "dashboard": dashboard,
+        "suggestions": suggestions,
     }

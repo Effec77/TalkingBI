@@ -201,9 +201,24 @@ class DeterministicIntentDetector:
 
         if query_stripped.startswith("show "):
             kpi_candidate = query_stripped[5:].strip()
+            # Let parser handle multi-part queries like:
+            # "show salary by department", "show salary and attrition", etc.
+            blocker_tokens = [
+                " by ",
+                " and ",
+                " with ",
+                " vs ",
+                " versus ",
+                " against ",
+                " over time",
+            ]
+            if any(tok in f" {kpi_candidate} " for tok in blocker_tokens):
+                return None
+
             mapped_kpi, source = self.schema_mapper.map_kpi(kpi_candidate)
 
-            if mapped_kpi:
+            # Only accept single resolved KPI names.
+            if isinstance(mapped_kpi, str):
                 self.applied = True
                 self.reason = f"show_kpi: {kpi_candidate}"
 
@@ -225,6 +240,70 @@ class DeterministicIntentDetector:
 
         return None
 
+    def detect_show_by(self, query: str) -> Optional[Dict[str, Any]]:
+        """
+        Detect deterministic pattern: "show <kpi> by <dimension>".
+        Handles common modifiers like "average"/"total" in KPI phrase.
+        """
+        if not query:
+            return None
+
+        q = query.strip().lower()
+        m = re.match(r"^show\s+(.+?)\s+by\s+(.+)$", q)
+        if not m:
+            return None
+
+        kpi_phrase = m.group(1).strip()
+        dim_phrase = m.group(2).strip()
+
+        for prefix in ["average ", "avg ", "mean ", "total "]:
+            if kpi_phrase.startswith(prefix):
+                kpi_phrase = kpi_phrase[len(prefix) :].strip()
+                break
+
+        # High-confidence aliases for common HR/business terms.
+        kpi_aliases = {
+            "compensation": "salary",
+            "pay": "salary",
+            "wages": "salary",
+            "attrition": "attrition_flag",
+            "performance": "performance_score",
+        }
+        kpi_phrase = kpi_aliases.get(kpi_phrase, kpi_phrase)
+
+        if hasattr(self.schema_mapper, "columns") and kpi_phrase in self.schema_mapper.columns:
+            mapped_kpi, kpi_status = kpi_phrase, "resolved"
+        else:
+            mapped_kpi, kpi_status = self.schema_mapper.map_kpi(kpi_phrase)
+
+        if hasattr(self.schema_mapper, "columns") and dim_phrase in self.schema_mapper.columns:
+            mapped_dim, dim_status = dim_phrase, "resolved"
+        else:
+            mapped_dim, dim_status = self.schema_mapper.map_dimension(dim_phrase)
+
+        if (
+            kpi_status == "resolved"
+            and dim_status == "resolved"
+            and isinstance(mapped_kpi, str)
+            and isinstance(mapped_dim, str)
+        ):
+            self.applied = True
+            self.reason = f"show_by: {kpi_phrase} by {dim_phrase}"
+            print(f"[6G] Applied: True")
+            print(f"[6G] Reason: {self.reason}")
+            print(f"[6G] Skipped LLM parsing")
+            return {
+                "intent": "SEGMENT_BY",
+                "kpi": mapped_kpi,
+                "kpi_1": None,
+                "kpi_2": None,
+                "dimension": mapped_dim,
+                "filter": None,
+                "source": "6G_deterministic",
+            }
+
+        return None
+
     def _extract_second_kpi(self, query: str) -> Optional[str]:
         """Extract and map the term after 'with' in a compare query.
         Returns None if no valid schema mapping found (prevents wrong fuzzy matches).
@@ -239,39 +318,126 @@ class DeterministicIntentDetector:
         return None
 
     def detect_compare(self, query: str) -> Optional[Dict[str, Any]]:
-        """Phase 9C.2: 'compare <kpi_1> with <kpi_2>' deterministic override."""
+        """Phase 9C.2: deterministic COMPARE extraction for common patterns."""
         q = query.strip().lower()
-        if "compare" not in q or "with" not in q:
+        if not any(tok in q for tok in ["compare", " vs ", " versus ", " against "]):
             return None
 
-        m = re.search(r"compare\s+(\S+)\s+with\b", q)
-        kpi_1_raw = m.group(1) if m else None
-
+        kpi_1_raw = None
         kpi_2_raw = None
-        m2 = re.search(r"\bwith\s+(\S+)", q)
-        if m2:
-            kpi_2_raw = m2.group(1)
-            
-        kpi_1 = None
-        kpi_2 = None
-        if kpi_1_raw and kpi_2_raw:
-            mapped_1, _ = self.schema_mapper.map_kpi(kpi_1_raw)
-            mapped_2, _ = self.schema_mapper.map_kpi(kpi_2_raw)
-            # Only apply deterministic override if the schema mapper mapped them EXACTLY or strongly.
-            # However, mapping can hallucinate "IT" -> "attrition_flag".
-            # To fix this, only apply if the raw words match column names closely.
-            if hasattr(self.schema_mapper, "kpis") and self.schema_mapper.kpis:
-                if kpi_1_raw in self.schema_mapper.kpis or mapped_1 == kpi_1_raw:
-                    kpi_1 = mapped_1
-                if kpi_2_raw in self.schema_mapper.kpis or mapped_2 == kpi_2_raw:
-                    kpi_2 = mapped_2
-            else:
-                kpi_1 = mapped_1
-                kpi_2 = mapped_2
+        dim_raw = None
+
+        # Pattern 0: "<dimension> wise compare <kpi1> versus <kpi2>"
+        m = re.search(
+            r"^(.+?)\s+wise\s+compare\s+(.+?)\s+(?:with|vs|versus|against)\s+(.+)$",
+            q,
+        )
+        if m:
+            dim_raw = m.group(1).strip()
+            kpi_1_raw = m.group(2).strip()
+            kpi_2_raw = m.group(3).strip()
+
+        # Pattern A: compare <kpi1> with|vs|versus|against <kpi2> [by <dim>]
+        if not kpi_1_raw or not kpi_2_raw:
+            m = re.search(
+                r"compare\s+(.+?)\s+(?:with|vs|versus|against)\s+(.+?)(?:\s+by\s+(.+))?$",
+                q,
+            )
+            if m:
+                kpi_1_raw = m.group(1).strip()
+                kpi_2_raw = m.group(2).strip()
+                dim_raw = (m.group(3) or "").strip() or dim_raw
+
+        # Pattern A2: plot/show <kpi1> vs <kpi2> [by <dim>]
+        if not kpi_1_raw or not kpi_2_raw:
+            m = re.search(
+                r"(?:plot|show)\s+(.+?)\s+(?:vs|versus|against)\s+(.+?)(?:\s+by\s+(.+))?$",
+                q,
+            )
+            if m:
+                kpi_1_raw = m.group(1).strip()
+                kpi_2_raw = m.group(2).strip()
+                dim_raw = (m.group(3) or "").strip() or dim_raw
+
+        if kpi_1_raw and kpi_2_raw and not dim_raw:
+            # Carry dimension from "<dimension> wise" anywhere in query.
+            m = re.search(r"\b([a-z_ ]+)\s+wise\b", q)
+            if m:
+                dim_raw = m.group(1).strip()
+
+        if kpi_1_raw and kpi_2_raw and not dim_raw:
+            # Retain previous behavior for "compare ... by ..."
+            m = re.search(
+                r"compare\s+(.+?)\s+(?:with|vs|versus|against)\s+(.+?)(?:\s+by\s+(.+))?$",
+                q,
+            )
+            if m and m.group(3):
+                dim_raw = m.group(3).strip()
+
+        if not kpi_1_raw or not kpi_2_raw:
+            # Pattern B: compare <kpi1> and <kpi2> [by <dim>]
+            m = re.search(r"compare\s+(.+?)\s+and\s+(.+?)(?:\s+by\s+(.+))?$", q)
+            if m:
+                kpi_1_raw = m.group(1).strip()
+                kpi_2_raw = m.group(2).strip()
+                dim_raw = (m.group(3) or "").strip() or dim_raw
+
+        if not kpi_1_raw or not kpi_2_raw:
+            return None
+
+        kpi_aliases = {
+            "compensation": "salary",
+            "pay": "salary",
+            "wages": "salary",
+            "attrition": "attrition_flag",
+            "performance": "performance_score",
+        }
+        kpi_1_raw = kpi_aliases.get(kpi_1_raw, kpi_1_raw)
+        kpi_2_raw = kpi_aliases.get(kpi_2_raw, kpi_2_raw)
+
+        # Keep this block for backward compatibility in existing logs/trace expectations.
+        m = re.search(
+            r"compare\s+(.+?)\s+(?:with|vs|versus|against)\s+(.+?)(?:\s+by\s+(.+))?$",
+            q,
+        )
+        if m and not (kpi_1_raw and kpi_2_raw):
+            kpi_1_raw = m.group(1).strip()
+            kpi_2_raw = m.group(2).strip()
+            dim_raw = (m.group(3) or "").strip() or None
+
+        if not kpi_1_raw or not kpi_2_raw:
+            return None
+
+        # Strip trailing directive phrases from KPI chunks.
+        for noise in [" by displaying a graph", " as a graph", " in a graph", " graph"]:
+            if kpi_2_raw.endswith(noise):
+                kpi_2_raw = kpi_2_raw[: -len(noise)].strip()
+
+        if hasattr(self.schema_mapper, "columns") and kpi_1_raw in self.schema_mapper.columns:
+            mapped_1, status_1 = kpi_1_raw, "resolved"
+        else:
+            mapped_1, status_1 = self.schema_mapper.map_kpi(kpi_1_raw)
+
+        if hasattr(self.schema_mapper, "columns") and kpi_2_raw in self.schema_mapper.columns:
+            mapped_2, status_2 = kpi_2_raw, "resolved"
+        else:
+            mapped_2, status_2 = self.schema_mapper.map_kpi(kpi_2_raw)
+
+        kpi_1 = mapped_1 if status_1 == "resolved" and isinstance(mapped_1, str) else None
+        kpi_2 = mapped_2 if status_2 == "resolved" and isinstance(mapped_2, str) else None
 
         # If they didn't strongly map to explicit metrics, fall back to LLM to parse dimension vs dimension limits
         if not kpi_1 or not kpi_2 or kpi_1 == kpi_2:
             return None
+
+        mapped_dim = None
+        if dim_raw:
+            for noise in [" by displaying a graph", " as a graph", " in a graph", " graph"]:
+                if dim_raw.endswith(noise):
+                    dim_raw = dim_raw[: -len(noise)].strip()
+            mapped_dim, dim_status = self.schema_mapper.map_dimension(dim_raw)
+            if dim_status != "resolved" or not isinstance(mapped_dim, str):
+                mapped_dim = None
 
         self.applied = True
         self.reason = f"compare_override: {kpi_1} vs {kpi_2}"
@@ -283,7 +449,7 @@ class DeterministicIntentDetector:
             "kpi": None,
             "kpi_1": kpi_1,
             "kpi_2": kpi_2,
-            "dimension": None,
+            "dimension": mapped_dim,
             "filter": None,
             "source": "6G_deterministic",
         }
@@ -348,6 +514,10 @@ class DeterministicIntentDetector:
             return intent
 
         intent = self.detect_compare(query)
+        if intent:
+            return intent
+
+        intent = self.detect_show_by(query)
         if intent:
             return intent
 

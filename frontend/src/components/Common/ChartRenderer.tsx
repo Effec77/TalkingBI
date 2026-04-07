@@ -37,20 +37,29 @@ const DEFAULT_LAYOUT = {
         size: 12
     },
     autosize: true,
-    margin: { l: 70, r: 24, t: 54, b: 72 },
-    hovermode: "x unified",
+    margin: { l: 70, r: 24, t: 92, b: 72 },
+    hovermode: "closest",
     dragmode: false,
-    title: { font: { size: 17, color: DESIGN_TOKENS.onBackground } },
+    title: {
+        font: { size: 17, color: DESIGN_TOKENS.onBackground },
+        x: 0.5,
+        xanchor: "center",
+        y: 0.98,
+        yanchor: "top",
+        pad: { t: 8, b: 10 },
+    },
     showlegend: false,
     xaxis: {
         gridcolor: DESIGN_TOKENS.grid,
         zerolinecolor: DESIGN_TOKENS.grid,
+        showspikes: false,
         tickfont: { color: '#334155', size: 11 },
         title: { standoff: 18, font: { size: 12, color: '#334155' } }
     },
     yaxis: {
         gridcolor: DESIGN_TOKENS.grid,
         zerolinecolor: DESIGN_TOKENS.grid,
+        showspikes: false,
         tickfont: { color: '#334155', size: 11 },
         title: { standoff: 16, font: { size: 12, color: '#334155' } }
     },
@@ -270,8 +279,16 @@ export default function ChartRenderer({ chart, initialPreferredType = 'auto' }: 
             return t;
         });
         data = data.map((t: any, idx: number) => _applyPreferredType(t, preferredType, idx));
-        layout.showlegend = data.length > 1;
         layout = { ...DEFAULT_LAYOUT, ...chart.spec.layout };
+        layout.showlegend = data.length > 1 || Boolean(chart.spec?.layout?.showlegend);
+        if (layout.showlegend) {
+            layout.legend = {
+                ...(layout.legend || {}),
+                orientation: layout.legend?.orientation || "h",
+                y: typeof layout.legend?.y === "number" ? layout.legend.y : 1.06,
+                x: typeof layout.legend?.x === "number" ? layout.legend.x : 0,
+            };
+        }
     } else if (chart.image && !imageFailed) {
         const raw = String(chart.image || "");
         const src = raw.startsWith("data:image/")
@@ -433,7 +450,22 @@ export default function ChartRenderer({ chart, initialPreferredType = 'auto' }: 
                 layout={layout}
                 useResizeHandler
                 style={{ width: '100%', height: '100%' }}
-                config={{ displayModeBar: false, responsive: true, scrollZoom: false, doubleClick: false }}
+                config={{
+                    displayModeBar: true,
+                    displaylogo: false,
+                    responsive: true,
+                    scrollZoom: false,
+                    doubleClick: false,
+                    modeBarButtonsToRemove: [
+                        "zoom2d",
+                        "select2d",
+                        "lasso2d",
+                        "zoomIn2d",
+                        "zoomOut2d",
+                        "autoScale2d",
+                        "toggleSpikelines",
+                    ],
+                }}
             />
         </div>
     );

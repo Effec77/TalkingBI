@@ -6,6 +6,7 @@ Computes dataset statistics and column characteristics
 import pandas as pd
 from typing import Dict, List
 from dataclasses import dataclass
+import warnings
 
 
 @dataclass
@@ -66,9 +67,14 @@ def profile_dataset(df: pd.DataFrame) -> DatasetProfile:
         # Try to detect datetime from object columns
         if not is_datetime and df[col].dtype == 'object':
             try:
-                pd.to_datetime(df[col].dropna().head(10))
-                is_datetime = True
-                is_categorical = False
+                sample = df[col].dropna().head(50)
+                if not sample.empty:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
+                    if float(parsed.notna().mean()) >= 0.8:
+                        is_datetime = True
+                        is_categorical = False
             except:
                 pass
         

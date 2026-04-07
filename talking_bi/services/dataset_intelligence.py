@@ -1,5 +1,6 @@
 import pandas as pd
 from typing import Dict, Any, List
+import warnings
 
 class DatasetIntelligence:
     """Phase 9C.3 Upgrade - Advanced dataset intelligence extraction."""
@@ -22,8 +23,13 @@ class DatasetIntelligence:
         is_datetime = pd.api.types.is_datetime64_any_dtype(series)
         if not is_datetime and series.dtype == 'object':
             try:
-                pd.to_datetime(series.dropna().head(10))
-                is_datetime = True
+                sample = series.dropna().head(50)
+                if not sample.empty:
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", UserWarning)
+                        parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
+                    if float(parsed.notna().mean()) >= 0.8:
+                        is_datetime = True
             except:
                 pass
                 

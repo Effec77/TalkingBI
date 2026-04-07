@@ -191,7 +191,7 @@ def _trend_chart(df: pd.DataFrame, kpi_col: str, time_col: str) -> Optional[Dict
     if len(grouped) > MAX_TREND_POINTS:
         grouped = (
             grouped.set_index(time_col)
-            .resample("M")[kpi_col]
+            .resample("ME")[kpi_col]
             .sum()
             .reset_index()
             .sort_values(time_col)

@@ -63,6 +63,20 @@ const _canonicalCategory = (v: unknown): string => {
   return cleaned.split(" ").map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
 };
 
+const _labelizeMetric = (v: unknown, fallback: string): string => {
+  const raw = String(v ?? "").trim();
+  if (!raw) return fallback;
+  const cleaned = raw
+    .replace(/^total\s+/i, "")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned
+    .split(" ")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+};
+
 const buildChartsFromData = (result: any): any[] => {
   const series = Array.isArray(result?.data) ? result.data : [];
   if (!series.length) return [];
@@ -97,30 +111,59 @@ const buildChartsFromData = (result: any): any[] => {
       const y1 = top.map((c) => (_toNum(map1.get(c)) / max1) * 100);
       const y2 = top.map((c) => (_toNum(map2.get(c)) / max2) * 100);
 
+      let metric1 = _labelizeMetric(s1?.kpi, "Metric 1");
+      let metric2 = _labelizeMetric(s2?.kpi, "Metric 2");
+      if (metric1.toLowerCase() === metric2.toLowerCase()) {
+        metric2 = `${metric2} (Series 2)`;
+      }
+
       return [{
         type: "bar",
-        title: "Department Comparison (0-100 Index)",
+        title: `${metric1} vs ${metric2} by ${_labelizeMetric(dimKey, "Dimension")} (0-100 Index)`,
         spec: {
           data: [
             {
               type: "bar",
-              name: s1?.kpi || "Metric 1",
+              name: metric1,
               x: top,
               y: y1,
               marker: { color: "#2f5597" },
+              hovertemplate: `<b>Department:</b> %{x}<br><b>${metric1} Index:</b> %{y:.2f}<extra></extra>`,
             },
             {
               type: "bar",
-              name: s2?.kpi || "Metric 2",
+              name: metric2,
               x: top,
               y: y2,
               marker: { color: "#ba3f6c" },
+              hovertemplate: `<b>Department:</b> %{x}<br><b>${metric2} Index:</b> %{y:.2f}<extra></extra>`,
             }
           ],
           layout: {
             barmode: "group",
+            margin: { l: 72, r: 24, t: 110, b: 72 },
+            title: { x: 0.5, xanchor: "center", y: 0.98, yanchor: "top" },
+            legend: {
+              orientation: "h",
+              x: 0,
+              y: 1.06,
+              title: { text: "Metrics" },
+            },
+            hovermode: "closest",
             xaxis: { title: dimKey, tickangle: -20 },
             yaxis: { title: "Relative Score (0-100)", range: [0, 105] },
+            annotations: [
+              {
+                x: 0,
+                y: 1.2,
+                xref: "paper",
+                yref: "paper",
+                showarrow: false,
+                align: "left",
+                text: "Each department has two bars: one per metric. Values are normalized to a 0-100 index to compare scale differences.",
+                font: { size: 11, color: "#475569" },
+              },
+            ],
           }
         }
       }];
@@ -196,13 +239,27 @@ export default function ResultRenderer({ result }: { result: any }) {
   const suggestionItems = normalizeItems(result.suggestions?.items);
   const tableRows = extractRows(result);
   const rawCharts = Array.isArray(result?.charts) ? result.charts : [];
+  const isRenderableChart = (c: any) =>
+    Boolean(
+      c &&
+      (
+        c.spec ||
+        c.image ||
+        (Array.isArray(c?.x) && c.x.length) ||
+        (Array.isArray(c?.y) && c.y.length) ||
+        (Array.isArray(c?.values) && c.values.length) ||
+        c.type
+      )
+    );
   const derivedCharts = buildChartsFromData(result);
+  const filteredRawCharts = rawCharts.filter(isRenderableChart);
+  const filteredDerivedCharts = derivedCharts.filter(isRenderableChart);
   const hasOnlyImageCharts =
-    rawCharts.length > 0 && rawCharts.every((c: any) => c?.image && !c?.spec);
+    filteredRawCharts.length > 0 && filteredRawCharts.every((c: any) => c?.image && !c?.spec);
   const isCompareIntent = String(result?.intent?.intent || "").toUpperCase() === "COMPARE";
-  const chartItems = ((isCompareIntent && derivedCharts.length > 0) || (hasOnlyImageCharts && derivedCharts.length > 0))
-    ? derivedCharts
-    : (rawCharts.length > 0 ? rawCharts : derivedCharts);
+  const chartItems = ((isCompareIntent && filteredDerivedCharts.length > 0) || (hasOnlyImageCharts && filteredDerivedCharts.length > 0))
+    ? filteredDerivedCharts
+    : (filteredRawCharts.length > 0 ? filteredRawCharts : filteredDerivedCharts);
   const hasManyCharts = (chartItems?.length || 0) > 1;
 
   return (
@@ -217,7 +274,15 @@ export default function ResultRenderer({ result }: { result: any }) {
             <div className="space-y-6">
                 <div className={hasManyCharts ? "grid grid-cols-1 xl:grid-cols-2 gap-5 items-start" : "space-y-4"}>
                   {chartItems?.map((c: any, i: number) => (
-                      <div key={i} className="animate-fade-in" style={{ animationDelay: `${i * 100}ms` }}>
+                      <div
+                        key={i}
+                        className={`animate-fade-in ${
+                          hasManyCharts && chartItems.length % 2 === 1 && i === chartItems.length - 1
+                            ? "xl:col-span-2"
+                            : ""
+                        }`}
+                        style={{ animationDelay: `${i * 100}ms` }}
+                      >
                            <ChartRenderer chart={c} />
                       </div>
                   ))}
@@ -234,7 +299,9 @@ export default function ResultRenderer({ result }: { result: any }) {
                 )}
                 {tableRows.length > 0 && (
                   <div className="pt-4 border-t border-[#dbe4f3]">
-                    <DataTable rows={tableRows} />
+                    <div className="max-h-[320px] overflow-auto rounded-xl">
+                      <DataTable rows={tableRows} />
+                    </div>
                   </div>
                 )}
             </div>

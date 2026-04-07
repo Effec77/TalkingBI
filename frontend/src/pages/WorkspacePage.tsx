@@ -61,6 +61,40 @@ const toDisplayLabel = (v: unknown): string => {
         .replace(/\b\w/g, (m) => m.toUpperCase());
 };
 
+const insightTone = (text: string): { chip: string; border: string; bg: string; label: string } => {
+    const t = text.toLowerCase();
+    if (t.includes("decrease") || t.includes("drop") || t.includes("lowest")) {
+        return {
+            chip: "text-rose-700 bg-rose-100 border-rose-200",
+            border: "border-rose-200",
+            bg: "bg-rose-50/55",
+            label: "Risk",
+        };
+    }
+    if (t.includes("increase") || t.includes("highest") || t.includes("top") || t.includes("contributes")) {
+        return {
+            chip: "text-emerald-700 bg-emerald-100 border-emerald-200",
+            border: "border-emerald-200",
+            bg: "bg-emerald-50/55",
+            label: "Opportunity",
+        };
+    }
+    if (t.includes("spike") || t.includes("anomaly")) {
+        return {
+            chip: "text-amber-700 bg-amber-100 border-amber-200",
+            border: "border-amber-200",
+            bg: "bg-amber-50/55",
+            label: "Anomaly",
+        };
+    }
+    return {
+        chip: "text-blue-700 bg-blue-100 border-blue-200",
+        border: "border-blue-200",
+        bg: "bg-blue-50/55",
+        label: "Insight",
+    };
+};
+
 const mapDashboardKpisToCards = (kpis: any[]): Array<{ label: string; value: string | number; description?: string }> => {
     if (!Array.isArray(kpis)) return [];
     return kpis
@@ -227,13 +261,26 @@ const WorkspacePage: React.FC = () => {
                         )}
 
                         {!isQueryMode && secondaryCharts.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
-                                {secondaryCharts.map((c: any, i: number) => (
-                                    <GlassCard key={i} className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm self-start">
-                                        <ResultRenderer result={{ status: "RESOLVED", charts: [c] }} />
-                                    </GlassCard>
-                                ))}
-                            </div>
+                            secondaryCharts.length === 1 ? (
+                                <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
+                                    <ResultRenderer result={{ status: "RESOLVED", charts: [secondaryCharts[0]] }} />
+                                </GlassCard>
+                            ) : (
+                                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-5 items-start">
+                                    {secondaryCharts.map((c: any, i: number) => (
+                                        <GlassCard
+                                            key={i}
+                                            className={`!p-5 !bg-white !border-[#cfd8ea] shadow-sm self-start ${
+                                                secondaryCharts.length % 2 === 1 && i === secondaryCharts.length - 1
+                                                    ? "2xl:col-span-2"
+                                                    : ""
+                                            }`}
+                                        >
+                                            <ResultRenderer result={{ status: "RESOLVED", charts: [c] }} />
+                                        </GlassCard>
+                                    ))}
+                                </div>
+                            )
                         )}
                     </section>
 
@@ -249,11 +296,32 @@ const WorkspacePage: React.FC = () => {
 
                         {supportingInsights.length > 0 && (
                             <GlassCard className="!p-5 !bg-white !border-[#cfd8ea] shadow-sm">
-                                <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f] mb-3">Insights</p>
-                                <ul className="space-y-3">
-                                    {supportingInsights.map((insight: string, idx: number) => (
-                                        <li key={idx} className="text-sm text-slate-700 leading-relaxed">{insight}</li>
-                                    ))}
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-xs uppercase tracking-[0.2em] text-[#2f4b7f]">Insights</p>
+                                    <span className="text-[10px] font-semibold px-2 py-1 rounded-full border border-[#cdd9ef] bg-[#eef4ff] text-[#365a96]">
+                                        {supportingInsights.length} items
+                                    </span>
+                                </div>
+                                <ul className="space-y-2.5">
+                                    {supportingInsights.map((insight: string, idx: number) => {
+                                        const tone = insightTone(insight);
+                                        return (
+                                            <li
+                                                key={idx}
+                                                className={`rounded-lg border ${tone.border} ${tone.bg} p-3`}
+                                            >
+                                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                                        #{idx + 1}
+                                                    </span>
+                                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${tone.chip}`}>
+                                                        {tone.label}
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-slate-700 leading-relaxed">{insight}</p>
+                                            </li>
+                                        );
+                                    })}
                                 </ul>
                             </GlassCard>
                         )}

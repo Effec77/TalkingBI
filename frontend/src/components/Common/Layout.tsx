@@ -70,7 +70,7 @@ const Layout: React.FC<LayoutProps> = ({ children, showSidebar = true }) => {
         )}
 
         <main className="flex-1 overflow-y-auto px-4 py-6 lg:px-8 lg:py-8">
-          <div className="max-w-[1700px] mx-auto">
+          <div className="w-full mx-auto">
             {children}
           </div>
         </main>

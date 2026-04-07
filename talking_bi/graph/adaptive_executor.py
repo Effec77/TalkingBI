@@ -279,6 +279,7 @@ def _build_insight_like_response(
     prepared_data: List[Dict[str, Any]],
     execution_trace: List[str],
     errors: List[str],
+    resolved_intent: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Build a minimal valid pipeline_result dict for PARTIAL_RUN.
@@ -288,6 +289,17 @@ def _build_insight_like_response(
     """
     insights = []
     chart_specs = []
+    intent = resolved_intent or {}
+    intent_type = (intent.get("intent") or "").upper()
+    requested_dimension = intent.get("dimension")
+
+    def _looks_temporal(values):
+        if not values:
+            return False
+        sample = str(values[0]).lower()
+        if "-" in sample or "/" in sample:
+            return True
+        return any(tok in sample for tok in ["date", "time", "month", "year"])
 
     for item in prepared_data:
         kpi = item.get("kpi", "")
@@ -327,6 +339,43 @@ def _build_insight_like_response(
                             "score": 0.8,
                         }
                     )
+
+                    x_key = [k for k in data[0].keys() if k != "value"]
+                    if x_key:
+                        x_key = x_key[0]
+                        x_values = [r.get(x_key) for r in data]
+                        is_temporal = _looks_temporal(x_values)
+                        if intent_type == "COMPARE":
+                            chart_type = "line" if is_temporal else "bar"
+                        elif requested_dimension and requested_dimension == x_key:
+                            chart_type = "line" if is_temporal else "bar"
+                        else:
+                            chart_type = "line" if is_temporal else "bar"
+
+                        plot_type = "scatter" if chart_type == "line" else "bar"
+                        trace = {
+                            "x": x_values,
+                            "y": [r.get("value") for r in data],
+                            "type": plot_type,
+                            "name": kpi,
+                        }
+                        if plot_type == "scatter":
+                            trace["mode"] = "lines+markers"
+
+                        chart_specs.append(
+                            {
+                                "kpi": kpi,
+                                "type": chart_type,
+                                "spec": {
+                                    "data": [trace],
+                                    "layout": {
+                                        "title": kpi,
+                                        "xaxis": {"title": x_key},
+                                        "yaxis": {"title": "value"},
+                                    },
+                                },
+                            }
+                        )
 
     return {
         "query_results": [],  # Not used in partial path
@@ -508,6 +557,7 @@ def _execute_partial(
             prepared_data=last,
             execution_trace=trace,
             errors=[],
+            resolved_intent=resolved_intent,
         )
         return AdaptiveResult(
             base_df=prev_state.base_df,
@@ -536,7 +586,9 @@ def _execute_partial(
     else:
         # Unknown reuse level — safety fallback (should never happen)
         errors.append(f"Unknown reuse level: {plan.reuse}")
-        pipeline_result = _build_insight_like_response([], trace, errors)
+        pipeline_result = _build_insight_like_response(
+            [], trace, errors, resolved_intent=resolved_intent
+        )
         return AdaptiveResult(
             base_df=prev_state.base_df,
             filtered_df=prev_state.filtered_df,
@@ -564,7 +616,9 @@ def _execute_partial(
         )
         trace.append(STEP_RENDER)
 
-        pipeline_result = _build_insight_like_response(prepared_data, trace, errors)
+        pipeline_result = _build_insight_like_response(
+            prepared_data, trace, errors, resolved_intent=resolved_intent
+        )
         return AdaptiveResult(
             base_df=new_base_df,
             filtered_df=new_filtered_df,
@@ -594,7 +648,9 @@ def _execute_partial(
     prepared_data = _build_prepared_data(kpi_specs_to_run, working_df, dimension)
     trace.append(STEP_RENDER)
 
-    pipeline_result = _build_insight_like_response(prepared_data, trace, errors)
+    pipeline_result = _build_insight_like_response(
+        prepared_data, trace, errors, resolved_intent=resolved_intent
+    )
 
     print(f"[6D:partial] Complete — ops={trace}, prepared={len(prepared_data)}")
 

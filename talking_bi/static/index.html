@@ -271,6 +271,17 @@
         .file-input-wrapper {
             margin-bottom: 1rem;
         }
+
+        .mode-select {
+            width: 100%;
+            margin-bottom: 1rem;
+            padding: 0.625rem;
+            border: 1px solid #d0d0d0;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: #fff;
+            color: #222;
+        }
         
         .file-input {
             display: none;
@@ -307,6 +318,11 @@
                     <small>or drag and drop here</small>
                 </label>
             </div>
+            <select id="modeSelect" class="mode-select">
+                <option value="both">Mode: Both (Dashboard + Query)</option>
+                <option value="dashboard">Mode: Dashboard Only</option>
+                <option value="query">Mode: Query Only</option>
+            </select>
             <button id="uploadBtn" class="btn btn-primary" style="width: 100%;">
                 Upload Dataset
             </button>
@@ -395,6 +411,7 @@
         const uploadOverlay = document.getElementById('uploadOverlay');
         const mainApp = document.getElementById('mainApp');
         const fileInput = document.getElementById('fileInput');
+        const modeSelect = document.getElementById('modeSelect');
         const uploadBtn = document.getElementById('uploadBtn');
         const queryInput = document.getElementById('queryInput');
         const sendBtn = document.getElementById('sendBtn');
@@ -437,7 +454,8 @@
                 uploadBtn.textContent = 'Uploading...';
                 uploadBtn.disabled = true;
 
-                const response = await fetch('/upload', {
+                const selectedMode = (modeSelect?.value || 'both').toLowerCase();
+                const response = await fetch(`/upload?mode=${encodeURIComponent(selectedMode)}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -465,6 +483,14 @@
                 // Show main app
                 uploadOverlay.classList.add('hidden');
                 mainApp.classList.remove('hidden');
+
+                renderUploadArtifacts(data);
+
+                if (selectedMode === 'dashboard') {
+                    queryInput.disabled = true;
+                    sendBtn.disabled = true;
+                    queryInput.placeholder = 'Dashboard-only session. Re-upload in query/both mode to ask questions.';
+                }
 
             } catch (error) {
                 console.error("Upload error trace:", error);
@@ -629,15 +655,33 @@
                 result.charts.forEach((chart, index) => {
                     const chartDiv = document.createElement('div');
                     chartDiv.className = 'chart-wrapper';
-                    chartDiv.innerHTML = `
-                        <div class="chart-title">${chart.kpi || 'Chart'}</div>
-                        <div id="chart-${index}" class="chart-div"></div>
-                    `;
+                    const title = chart.kpi || 'Chart';
+                    chartDiv.innerHTML = `<div class="chart-title">${title}</div>`;
                     chartsArea.appendChild(chartDiv);
 
-                    // Render with Plotly
-                    if (chart.spec) {
-                        Plotly.newPlot(`chart-${index}`, chart.spec.data, chart.spec.layout, {responsive: true});
+                    // Render backend-generated image charts first.
+                    if (chart.image) {
+                        const img = document.createElement('img');
+                        img.src = `data:image/png;base64,${chart.image}`;
+                        img.alt = title;
+                        img.style.width = '100%';
+                        img.style.height = 'auto';
+                        img.style.borderRadius = '6px';
+                        chartDiv.appendChild(img);
+                    } else if (chart.spec) {
+                        // Fallback: Render Plotly specs if provided.
+                        const plotDiv = document.createElement('div');
+                        plotDiv.id = `chart-${index}`;
+                        plotDiv.className = 'chart-div';
+                        chartDiv.appendChild(plotDiv);
+                        Plotly.newPlot(plotDiv.id, chart.spec.data, chart.spec.layout, {responsive: true});
+                    } else if (chart.type === 'metric') {
+                        const metric = document.createElement('div');
+                        metric.style.fontSize = '1.8rem';
+                        metric.style.fontWeight = '700';
+                        metric.style.color = '#1a1a2e';
+                        metric.textContent = String(chart.value ?? '');
+                        chartDiv.appendChild(metric);
                     }
                 });
             }
@@ -688,6 +732,142 @@
             } else {
                 insightsArea.innerHTML = '<p style="color: #999;">No insights generated for this query.</p>';
             }
+        }
+
+        function renderUploadArtifacts(uploadData) {
+            chartsArea.innerHTML = '';
+            insightsArea.innerHTML = '';
+            traceArea.innerHTML = '';
+
+            const dashboard = uploadData?.dashboard || {};
+            const charts = dashboard?.charts || [];
+            const kpis = dashboard?.kpis || [];
+            const insights = dashboard?.insights || [];
+            const suggestions = uploadData?.suggestions || [];
+            const summaryText = uploadData?.dataset_summary_text || '';
+
+            if (summaryText) {
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'chart-wrapper';
+                summaryDiv.innerHTML = `<div class="chart-title">Dataset Summary</div><p style="color:#444;font-size:0.9rem;line-height:1.5;">${summaryText}</p>`;
+                chartsArea.appendChild(summaryDiv);
+            }
+
+            if (kpis.length > 0) {
+                const kpiDiv = document.createElement('div');
+                kpiDiv.className = 'chart-wrapper';
+                const kpiRows = kpis.map(k => {
+                    return `<tr>
+                        <td style="padding:0.5rem;border-bottom:1px solid #eee;">${k.name ?? ''}</td>
+                        <td style="padding:0.5rem;border-bottom:1px solid #eee;">${(k.total ?? '').toString()}</td>
+                        <td style="padding:0.5rem;border-bottom:1px solid #eee;">${(k.average ?? '').toString()}</td>
+                        <td style="padding:0.5rem;border-bottom:1px solid #eee;">${(k.min ?? '').toString()}</td>
+                        <td style="padding:0.5rem;border-bottom:1px solid #eee;">${(k.max ?? '').toString()}</td>
+                    </tr>`;
+                }).join('');
+
+                kpiDiv.innerHTML = `
+                    <div class="chart-title">KPI Cards</div>
+                    <table style="width:100%;font-size:0.875rem;border-collapse:collapse;">
+                        <thead>
+                            <tr style="background:#f5f5f5;">
+                                <th style="padding:0.5rem;text-align:left;border-bottom:2px solid #ddd;">KPI</th>
+                                <th style="padding:0.5rem;text-align:left;border-bottom:2px solid #ddd;">Total</th>
+                                <th style="padding:0.5rem;text-align:left;border-bottom:2px solid #ddd;">Average</th>
+                                <th style="padding:0.5rem;text-align:left;border-bottom:2px solid #ddd;">Min</th>
+                                <th style="padding:0.5rem;text-align:left;border-bottom:2px solid #ddd;">Max</th>
+                            </tr>
+                        </thead>
+                        <tbody>${kpiRows}</tbody>
+                    </table>
+                `;
+                chartsArea.appendChild(kpiDiv);
+            }
+
+            charts.forEach((chart, index) => {
+                const chartDiv = document.createElement('div');
+                chartDiv.className = 'chart-wrapper';
+                chartDiv.innerHTML = `<div class="chart-title">${chart.title || chart.kpi || 'Chart'}</div>`;
+                chartsArea.appendChild(chartDiv);
+
+                if (chart.spec && chart.spec.data && chart.spec.layout) {
+                    const plotDiv = document.createElement('div');
+                    plotDiv.id = `upload-chart-${index}`;
+                    plotDiv.className = 'chart-div';
+                    chartDiv.appendChild(plotDiv);
+                    Plotly.newPlot(plotDiv.id, chart.spec.data, chart.spec.layout, { responsive: true });
+                    return;
+                }
+
+                if (chart.type === 'bar' || chart.type === 'line') {
+                    const xVals = chart.x || [];
+                    const yVals = chart.y || [];
+                    if (xVals.length > 0 && yVals.length > 0) {
+                        const plotDiv = document.createElement('div');
+                        plotDiv.id = `upload-chart-${index}`;
+                        plotDiv.className = 'chart-div';
+                        chartDiv.appendChild(plotDiv);
+                        Plotly.newPlot(
+                            plotDiv.id,
+                            [{ type: chart.type, x: xVals, y: yVals }],
+                            { title: chart.title || '', margin: { t: 50, r: 20, b: 60, l: 60 } },
+                            { responsive: true }
+                        );
+                        return;
+                    }
+                }
+
+                if (chart.type === 'histogram') {
+                    const vals = chart.values || [];
+                    if (vals.length > 0) {
+                        const plotDiv = document.createElement('div');
+                        plotDiv.id = `upload-chart-${index}`;
+                        plotDiv.className = 'chart-div';
+                        chartDiv.appendChild(plotDiv);
+                        Plotly.newPlot(
+                            plotDiv.id,
+                            [{ type: 'histogram', x: vals }],
+                            { title: chart.title || '', margin: { t: 50, r: 20, b: 60, l: 60 } },
+                            { responsive: true }
+                        );
+                        return;
+                    }
+                }
+
+                chartDiv.innerHTML += '<p style="color:#777;font-size:0.875rem;">Chart data unavailable.</p>';
+            });
+
+            if (insights.length > 0) {
+                insights.slice(0, 5).forEach(text => {
+                    const card = document.createElement('div');
+                    card.className = 'insight-card';
+                    card.innerHTML = `
+                        <div class="insight-type">INSIGHT</div>
+                        <div class="insight-text">${String(text)}</div>
+                    `;
+                    insightsArea.appendChild(card);
+                });
+            } else {
+                insightsArea.innerHTML = '<p style="color: #999;">No auto insights generated.</p>';
+            }
+
+            if (suggestions.length > 0) {
+                const suggestionCard = document.createElement('div');
+                suggestionCard.className = 'insight-card';
+                suggestionCard.innerHTML = `
+                    <div class="insight-type">SUGGESTIONS</div>
+                    <div class="insight-text">${suggestions.join('<br>')}</div>
+                `;
+                insightsArea.appendChild(suggestionCard);
+            }
+
+            traceArea.innerHTML = `<div class="trace-block">${JSON.stringify({
+                mode: uploadData?.mode || 'both',
+                dashboard_kpis: kpis.length,
+                dashboard_charts: charts.length,
+                insights: insights.length,
+                suggestions: suggestions.length
+            }, null, 2)}</div>`;
         }
 
         // Update Status

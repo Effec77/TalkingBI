@@ -176,7 +176,11 @@ class SchemaMapper:
 
         # Map KPI
         if intent_dict.get("kpi"):
-            mapped_kpi, status = self.map_kpi(intent_dict["kpi"])
+            raw_kpi = intent_dict["kpi"]
+            if isinstance(raw_kpi, str) and raw_kpi in self.columns:
+                mapped_kpi, status = raw_kpi, "exact_column"
+            else:
+                mapped_kpi, status = self.map_kpi(raw_kpi)
             if status == "ambiguous":
                 result["kpi"] = None
                 mapping_meta["kpi_source"] = status
@@ -192,7 +196,11 @@ class SchemaMapper:
 
         # Map kpi_1 (for COMPARE intent)
         if intent_dict.get("kpi_1"):
-            mapped_kpi_1, status = self.map_kpi(intent_dict["kpi_1"])
+            raw_kpi_1 = intent_dict["kpi_1"]
+            if isinstance(raw_kpi_1, str) and raw_kpi_1 in self.columns:
+                mapped_kpi_1, status = raw_kpi_1, "exact_column"
+            else:
+                mapped_kpi_1, status = self.map_kpi(raw_kpi_1)
             if status == "ambiguous":
                 result["kpi_1"] = None
                 mapping_meta["confidence"] = 0.0
@@ -204,7 +212,11 @@ class SchemaMapper:
 
         # Map kpi_2 (for COMPARE intent)
         if intent_dict.get("kpi_2"):
-            mapped_kpi_2, status = self.map_kpi(intent_dict["kpi_2"])
+            raw_kpi_2 = intent_dict["kpi_2"]
+            if isinstance(raw_kpi_2, str) and raw_kpi_2 in self.columns:
+                mapped_kpi_2, status = raw_kpi_2, "exact_column"
+            else:
+                mapped_kpi_2, status = self.map_kpi(raw_kpi_2)
             if status == "ambiguous":
                 result["kpi_2"] = None
                 mapping_meta["confidence"] = 0.0

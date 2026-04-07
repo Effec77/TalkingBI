@@ -32,6 +32,12 @@ def query_node(state: PipelineState) -> dict:
 
     run_id = state["run_id"]
     kpis = state["dashboard_plan"]["kpis"]
+    intent = state.get("intent", {}) or {}
+    intent_type = (intent.get("intent") or "").upper()
+    requested_kpi = intent.get("kpi")
+    requested_kpi_1 = intent.get("kpi_1")
+    requested_kpi_2 = intent.get("kpi_2")
+    requested_dimension = intent.get("dimension")
     errors = list(state.get("errors", []))
     retry_flags = dict(state.get("retry_flags", {}))
     trace = list(state.get("execution_trace", []))
@@ -50,7 +56,29 @@ def query_node(state: PipelineState) -> dict:
 
     results = []
 
-    for kpi in kpis:
+    def _kpi_matches(kpi_spec, requested_name):
+        if not requested_name:
+            return False
+        req = str(requested_name).lower().strip()
+        name = str(kpi_spec.get("name", "")).lower().strip()
+        src = str(kpi_spec.get("source_column", "")).lower().strip()
+        return req in {name, src}
+
+    # FULL_RUN must still honor resolved intent.
+    selected_kpis = list(kpis)
+    if intent_type == "COMPARE" and (requested_kpi_1 or requested_kpi_2):
+        selected_kpis = [
+            k
+            for k in kpis
+            if _kpi_matches(k, requested_kpi_1) or _kpi_matches(k, requested_kpi_2)
+        ]
+    elif requested_kpi:
+        selected_kpis = [k for k in kpis if _kpi_matches(k, requested_kpi)]
+
+    if not selected_kpis:
+        selected_kpis = list(kpis)
+
+    for kpi in selected_kpis:
         kpi_name = kpi.get("name", "unknown")
         col = kpi.get("source_column")
         agg = kpi.get("aggregation", "").lower()
@@ -58,7 +86,14 @@ def query_node(state: PipelineState) -> dict:
         segment_by = kpi.get("segment_by")
 
         try:
-            result = _execute_kpi(df, col, agg, time_col, segment_by)
+            result = _execute_kpi(
+                df,
+                col,
+                agg,
+                time_col,
+                segment_by,
+                forced_group_by=requested_dimension,
+            )
 
             results.append(
                 {
@@ -78,7 +113,14 @@ def query_node(state: PipelineState) -> dict:
                 retry_flags[kpi_name] = True
 
                 try:
-                    result = _execute_kpi(df, col, agg, time_col=None, segment_by=None)
+                    result = _execute_kpi(
+                        df,
+                        col,
+                        agg,
+                        time_col=None,
+                        segment_by=None,
+                        forced_group_by=requested_dimension,
+                    )
                     results.append(
                         {
                             "kpi": kpi_name,
@@ -127,7 +169,7 @@ def query_node(state: PipelineState) -> dict:
     }
 
 
-def _execute_kpi(df, col, agg, time_col, segment_by):
+def _execute_kpi(df, col, agg, time_col, segment_by, forced_group_by=None):
     """
     Pure pandas KPI execution helper.
     No eval(), no exec(), no LLM.
@@ -139,7 +181,10 @@ def _execute_kpi(df, col, agg, time_col, segment_by):
     if segment_by and segment_by not in df.columns:
         segment_by = None
 
-    group_by = time_col or segment_by
+    if forced_group_by and forced_group_by in df.columns:
+        group_by = forced_group_by
+    else:
+        group_by = time_col or segment_by
 
     if agg == "count":
         if group_by:
@@ -685,11 +730,24 @@ def insight_node(state: PipelineState) -> dict:
 renderer = ChartRenderer()
 
 
+def _looks_temporal_key(values):
+    """Heuristic: treat axis as temporal if values look like dates/timestamps."""
+    if not values:
+        return False
+    sample = str(values[0]).lower()
+    if "-" in sample or "/" in sample:
+        return True
+    return any(tok in sample for tok in ["date", "time", "month", "year"])
+
+
 def chart_node(state: PipelineState) -> dict:
     print(f"[NODE:chart] run_id={state['run_id']}")
 
     charts = []
     prepared = state.get("prepared_data") or []
+    intent = state.get("intent", {}) or {}
+    intent_type = (intent.get("intent") or "").upper()
+    requested_dimension = intent.get("dimension")
 
     # FIX 1 — Build importance map from transformed_data
     importance_map = {
@@ -747,10 +805,16 @@ def chart_node(state: PipelineState) -> dict:
                 )
                 y_key = "value"
 
-                # FIX 1 — Detect if categorical vs time-series
+                # Prefer explicit compare/dimension behavior over cardinality-only heuristics.
                 x_values = [d[x_key] for d in data]
-                is_categorical = len(set(x_values)) <= 10
-                chart_type = "bar" if is_categorical else "line"
+                is_temporal = _looks_temporal_key(x_values)
+                if intent_type == "COMPARE":
+                    chart_type = "line" if is_temporal else "bar"
+                elif requested_dimension and requested_dimension == x_key:
+                    chart_type = "line" if is_temporal else "bar"
+                else:
+                    is_categorical = len(set(x_values)) <= 10
+                    chart_type = "bar" if is_categorical else "line"
 
                 # FIX 3 — Use correct renderer
                 if chart_type == "line":

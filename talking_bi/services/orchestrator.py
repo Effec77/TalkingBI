@@ -273,8 +273,10 @@ class QueryOrchestrator:
                         # Task 8: Confidence Scoring (Phase 9C)
             kpi_term = intent.get("kpi")
             dim_term = intent.get("dimension")
-            
-            kpi_conf = 1.0 if kpi_term in df.columns else 0.5 if kpi_term else 0.0
+
+            # Guard against malformed parser outputs (e.g. list-valued KPI from ambiguity).
+            kpi_is_scalar = isinstance(kpi_term, str)
+            kpi_conf = 1.0 if (kpi_is_scalar and kpi_term in df.columns) else 0.5 if kpi_term else 0.0
             sem_conf = trace.semantic_confidence or 0.0
             ctx_conf = 1.0 if trace.context_used else 0.0
             
@@ -456,6 +458,7 @@ class QueryOrchestrator:
                 not resolved_intent.get("kpi")
                 and not resolved_intent.get("dimension")
                 and not resolved_intent.get("filter")
+                and resolved_intent.get("intent") != "COMPARE"
             ):
                 latency_ms = (time.time() - start_time) * 1000
                 return OrchestratorResult(
@@ -474,8 +477,12 @@ class QueryOrchestrator:
                     trace=trace.to_dict(),
                 )
 
-            if not resolved_intent.get("kpi") and (
+            if (
+                not resolved_intent.get("kpi")
+                and resolved_intent.get("intent") != "COMPARE"
+                and (
                 resolved_intent.get("dimension") or resolved_intent.get("filter")
+                )
             ):
                 latency_ms = (time.time() - start_time) * 1000
                 return OrchestratorResult(

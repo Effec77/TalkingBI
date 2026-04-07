@@ -314,7 +314,8 @@ class ContextResolver:
         - kpi_2: USER ONLY (NEVER from context)
         - FIX 2: kpi_1 != kpi_2 (validation)
         """
-        kpi_1 = parsed_intent.get("kpi")
+        # Prefer explicit kpi_1 for compare, fallback to legacy "kpi" field.
+        kpi_1 = parsed_intent.get("kpi_1") or parsed_intent.get("kpi")
         kpi_2 = parsed_intent.get("kpi_2")
         dimension = parsed_intent.get("dimension")
         filter_val = parsed_intent.get("filter")

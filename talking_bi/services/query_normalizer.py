@@ -186,9 +186,13 @@ class QueryNormalizer:
         # Step 4: Handle structural phrase normalizations (NOT KPI mappings)
         # These change query structure but don't map KPIs
         phrase_replacements = [
+            (r"\bnow provide me\b", "show"),
+            (r"\bplease provide me\b", "show"),
+            (r"\bprovide me\b", "show"),
             (r"\bshow me\b", "show"),
             (r"\bshow us\b", "show"),
             (r"\bgive me\b", "show"),
+            (r"\bnow show me\b", "show"),
             (r"\bwhat is\b", "show"),
             (r"\bwhat are\b", "show"),
             (r"\bhow much\b", "show"),

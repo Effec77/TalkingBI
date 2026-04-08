@@ -1,4 +1,4 @@
-import apiClient from "./api";
+import apiClient, { BASE_URL } from "./api";
 import {
   type UserCreate,
   type UserLogin,
@@ -57,9 +57,8 @@ export const authService = {
   },
 
   startOAuth(provider: "google" | "github") {
-    const apiBase = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
     const callback = `${window.location.origin}/auth/callback`;
-    const url = `${apiBase}/auth/oauth/${provider}/start?redirect_uri=${encodeURIComponent(callback)}`;
+    const url = `${BASE_URL}/auth/oauth/${provider}/start?redirect_uri=${encodeURIComponent(callback)}`;
     window.location.href = url;
   },
 

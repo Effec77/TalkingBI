@@ -1,12 +1,13 @@
 import React, { useState, useRef } from "react";
 import { uploadCSV } from "../services/uploadService";
+import { BASE_URL } from "../services/api";
 import { useSessionStore } from "../store/useSessionStore";
 import { useNavigate } from "react-router-dom";
 import { logEvent } from "../utils/logger";
 import Layout from "../components/Common/Layout";
 import GlassCard from "../components/Common/GlassCard";
 
-const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+const API_BASE = BASE_URL;
 
 const UploadPage: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { BASE_URL } from "../services/api";
 import { Link, useNavigate } from "react-router-dom";
 import AuthShell from "../components/Auth/AuthShellLocked";
 
@@ -11,7 +12,7 @@ const ResetPasswordPageModern: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/reset-password", {
+      const res = await fetch(`${BASE_URL}/auth/reset-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),

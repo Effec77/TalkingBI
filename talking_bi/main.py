@@ -47,9 +47,13 @@ frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/")
 extra_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
 extra_origins = [o.strip().rstrip("/") for o in extra_origins_raw.split(",") if o.strip()]
 allow_origins = list(dict.fromkeys([frontend_url, "http://localhost:5173", "http://127.0.0.1:5173", *extra_origins]))
-# Always allow Vercel deployment URLs (production + preview) to avoid
-# repeated CORS breakage when deployment aliases change.
-allow_origin_regex = r"^https://([a-z0-9-]+\.)?vercel\.app$"
+# Allow common hosted frontend origins when credentials are enabled:
+# - Vercel production/preview domains
+# - AWS S3 static website endpoints (http)
+allow_origin_regex = os.getenv(
+    "CORS_ALLOW_ORIGIN_REGEX",
+    r"(^https://([a-z0-9-]+\.)?vercel\.app$)|(^http://[a-z0-9.-]+\.s3-website\.[a-z0-9-]+\.amazonaws\.com$)",
+)
 
 app.add_middleware(
     CORSMiddleware,

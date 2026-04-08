@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+import os
 
 from api.upload import router as upload_router
 from api.intelligence import router as intelligence_router
@@ -39,9 +40,17 @@ app = FastAPI(
 )
 
 # CORS Middleware
+# NOTE:
+# `allow_credentials=True` cannot be used with wildcard origin `*`.
+# Build an explicit allow-list from env so deployed frontend can call backend.
+frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/")
+extra_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
+extra_origins = [o.strip().rstrip("/") for o in extra_origins_raw.split(",") if o.strip()]
+allow_origins = list(dict.fromkeys([frontend_url, "http://localhost:5173", "http://127.0.0.1:5173", *extra_origins]))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development, allow all. Change to specific frontend origin in production.
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

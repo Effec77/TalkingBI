@@ -63,14 +63,25 @@ allow_origin_regex = _norm_origin(os.getenv(
     r"(^https://([a-z0-9-]+\.)?vercel\.app$)|(^http://[a-z0-9.-]+\.s3-website\.[a-z0-9-]+\.amazonaws\.com$)",
 ))
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_origin_regex=allow_origin_regex,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+cors_allow_all = os.getenv("CORS_ALLOW_ALL", "").strip().lower() in {"1", "true", "yes", "on"}
+if cors_allow_all:
+    # Emergency deployment mode: allow all origins (no credentials).
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allow_origins,
+        allow_origin_regex=allow_origin_regex,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

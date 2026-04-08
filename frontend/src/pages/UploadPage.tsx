@@ -6,6 +6,8 @@ import { logEvent } from "../utils/logger";
 import Layout from "../components/Common/Layout";
 import GlassCard from "../components/Common/GlassCard";
 
+const API_BASE = (import.meta.env.VITE_API_URL || "http://127.0.0.1:8000").replace(/\/+$/, "");
+
 const UploadPage: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [mode, setMode] = useState<"dashboard" | "query" | "both">("both");
@@ -33,7 +35,7 @@ const UploadPage: React.FC = () => {
     React.useEffect(() => {
         const checkHealth = async () => {
             try {
-                const res = await fetch("http://127.0.0.1:8000/health");
+                const res = await fetch(`${API_BASE}/health`);
                 setBackendHealthy(res.ok);
             } catch {
                 setBackendHealthy(false);
@@ -64,7 +66,7 @@ const UploadPage: React.FC = () => {
         } catch (err: any) {
             logEvent('UPLOAD_ERROR', err);
             console.error(err);
-            alert(err.message || "Upload failed. Please check if the backend is running at http://127.0.0.1:8000");
+            alert(err.message || `Upload failed. Please check if the backend is running at ${API_BASE}`);
         }
         setLoading(false);
     };

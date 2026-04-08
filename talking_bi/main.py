@@ -46,17 +46,22 @@ app = FastAPI(
 # NOTE:
 # `allow_credentials=True` cannot be used with wildcard origin `*`.
 # Build an explicit allow-list from env so deployed frontend can call backend.
-frontend_url = os.getenv("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/")
+def _norm_origin(value: str) -> str:
+    # Normalize env-configured origins to avoid hidden whitespace/quote mismatches.
+    return (value or "").strip().strip('"').strip("'").rstrip("/")
+
+
+frontend_url = _norm_origin(os.getenv("FRONTEND_URL", "http://127.0.0.1:5173"))
 extra_origins_raw = os.getenv("CORS_ALLOWED_ORIGINS", "")
-extra_origins = [o.strip().rstrip("/") for o in extra_origins_raw.split(",") if o.strip()]
+extra_origins = [_norm_origin(o) for o in extra_origins_raw.split(",") if _norm_origin(o)]
 allow_origins = list(dict.fromkeys([frontend_url, "http://localhost:5173", "http://127.0.0.1:5173", *extra_origins]))
 # Allow common hosted frontend origins when credentials are enabled:
 # - Vercel production/preview domains
 # - AWS S3 static website endpoints (http)
-allow_origin_regex = os.getenv(
+allow_origin_regex = _norm_origin(os.getenv(
     "CORS_ALLOW_ORIGIN_REGEX",
     r"(^https://([a-z0-9-]+\.)?vercel\.app$)|(^http://[a-z0-9.-]+\.s3-website\.[a-z0-9-]+\.amazonaws\.com$)",
-)
+))
 
 app.add_middleware(
     CORSMiddleware,

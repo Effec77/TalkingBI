@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 import os
+from dotenv import load_dotenv
 
 from api.upload import router as upload_router
 from api.intelligence import router as intelligence_router
@@ -31,6 +32,8 @@ async def lifespan(app: FastAPI):
 
 
 from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 app = FastAPI(
     title="Talking BI — Phase 10",
